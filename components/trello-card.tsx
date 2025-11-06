@@ -64,11 +64,11 @@ const TrelloCard = ({
       )}
 
       {members && members.length > 0 && (
-        <div className="flex items-center justify-end !gap-3 -space-x-2 pt-0.5">
+        <div className="flex items-center justify-end gap-1.5 pt-0.5">
           {members.slice(0, 3).map((member, idx) => (
             <Avatar
               key={member.id}
-              className="h-5 w-5 flex-shrink-0 !border-0"
+              className="h-5 w-5 flex-shrink-0 border-0"
               style={{ zIndex: 10 - idx }}
               title={member.name}
             >
@@ -76,7 +76,7 @@ const TrelloCard = ({
             </Avatar>
           ))}
           {members.length > 3 && (
-            <Avatar className="h-5 w-5 flex-shrink-0 !border-0">
+            <Avatar className="h-5 w-5 flex-shrink-0 border-0">
               <AvatarFallback className="text-[9px] font-bold bg-gray-400 text-white">
                 +{members.length - 3}
               </AvatarFallback>

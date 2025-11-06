@@ -1,5 +1,6 @@
 "use client"
 
+import type React from "react"
 import { useState } from "react"
 import { Copy, Link, Trash2 } from "lucide-react"
 import {
@@ -23,7 +24,11 @@ interface Member {
   initials: string
 }
 
-export function ShareBoardModal() {
+interface ShareBoardModalProps {
+  trigger?: React.ReactNode
+}
+
+export function ShareBoardModal({ trigger }: ShareBoardModalProps = {}) {
   const [isOpen, setIsOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
   const [selectedPermission, setSelectedPermission] = useState<"view" | "edit" | "admin">("edit")
@@ -95,9 +100,11 @@ export function ShareBoardModal() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-white hover:bg-white/20">
-          Share
-        </Button>
+        {trigger || (
+          <Button variant="ghost" size="sm" className="text-white hover:bg-white/20">
+            Share
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>

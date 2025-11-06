@@ -1,5 +1,6 @@
 "use client"
 
+import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -31,9 +32,10 @@ interface MembersManagerProps {
   selectedMembers: Member[]
   onMembersChange: (members: Member[]) => void
   variant?: "button" | "avatar-stack"
+  trigger?: React.ReactNode
 }
 
-export function MembersManager({ selectedMembers, onMembersChange, variant = "button" }: MembersManagerProps) {
+export function MembersManager({ selectedMembers, onMembersChange, variant = "button", trigger }: MembersManagerProps) {
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -55,7 +57,9 @@ export function MembersManager({ selectedMembers, onMembersChange, variant = "bu
   return (
     <Popover open={open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
-        {variant === "button" ? (
+        {trigger ? (
+          trigger
+        ) : variant === "button" ? (
           <Button variant="outline" size="sm" className="bg-background">
             <User className="h-4 w-4 mr-2" />
             Members

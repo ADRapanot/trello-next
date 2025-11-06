@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useDrag, useDrop } from "react-dnd"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -45,6 +45,13 @@ export function KanbanCard({
   const [clickCount, setClickCount] = useState(0)
   const [clickTimer, setClickTimer] = useState<NodeJS.Timeout | null>(null)
   const [showMenu, setShowMenu] = useState(false)
+  const [isComplete, setIsComplete] = useState(card.isComplete || false)
+  const [isHovered, setIsHovered] = useState(false)
+
+  // Sync local state with card prop when it changes
+  useEffect(() => {
+    setIsComplete(card.isComplete || false)
+  }, [card.isComplete])
 
   const [{ isDragging }, drag, preview] = useDrag({
     type: "CARD",
@@ -97,7 +104,12 @@ export function KanbanCard({
         <div className="h-2 bg-primary/30 rounded-full mb-2 animate-pulse transition-all duration-200" />
       )}
 
-      <div ref={(node) => drag(drop(node))} className="relative group">
+      <div 
+        ref={(node) => drag(drop(node))} 
+        className="relative group"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
         <Card
           className={`p-2.5 cursor-pointer hover:bg-accent/50 transition-all duration-200 bg-white dark:bg-card ${
             isDragging ? "opacity-30 scale-95 rotate-2" : "opacity-100 scale-100"
@@ -145,8 +157,52 @@ export function KanbanCard({
             </div>
           )}
 
-          {/* Title */}
-          <h4 className="text-sm font-medium mb-1.5 text-foreground pr-6">{card.title}</h4>
+          {/* Title with Complete Radio Button */}
+          <div className="flex items-center gap-2 mb-1.5 relative min-h-[20px]">
+            {/* Mark as Complete Radio Button - appears on hover */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                const newCompleteState = !isComplete
+                setIsComplete(newCompleteState)
+                onUpdateCard?.(listId, card.id, { ...card, isComplete: newCompleteState })
+              }}
+              className={`
+                absolute left-0 top-1/2 -translate-y-1/2
+                w-4 h-4 rounded-full border-2 transition-all duration-300 ease-in-out
+                flex items-center justify-center flex-shrink-0
+                ${isComplete 
+                  ? 'opacity-100 translate-x-0 bg-primary border-primary' 
+                  : isHovered
+                    ? 'opacity-100 translate-x-0 bg-transparent border-muted-foreground/40 hover:border-primary'
+                    : 'opacity-0 -translate-x-4 bg-transparent border-muted-foreground/40'
+                }
+                focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+                cursor-pointer z-10
+              `}
+              aria-label={isComplete ? "Mark as incomplete" : "Mark as complete"}
+            >
+              {isComplete && (
+                <svg
+                  className="w-2.5 h-2.5 text-primary-foreground"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              )}
+            </button>
+            <h4 className={`text-sm font-medium text-foreground pr-6 transition-all duration-300 ${
+              isComplete ? 'line-through opacity-60' : ''
+            } ${isComplete || isHovered ? 'pl-5' : 'pl-0'}`}>
+              {card.title}
+            </h4>
+          </div>
 
           {/* Metadata badges */}
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -186,16 +242,16 @@ export function KanbanCard({
 
           {/* Members */}
           {card.members && card.members.length > 0 && (
-            <div className="flex items-center gap-1 mt-1.5 -space-x-2">
+            <div className="flex items-center gap-1.5 mt-1.5">
               {card.members.slice(0, 4).map((member, idx) => (
-                <Avatar key={member.id} className="h-6 w-6 border-2 border-background" style={{ zIndex: 10 - idx }}>
+                <Avatar key={member.id} className="h-6 w-6 border-0" style={{ zIndex: 10 - idx }}>
                   <AvatarFallback className="text-[10px] bg-primary text-primary-foreground">
                     {member.avatar}
                   </AvatarFallback>
                 </Avatar>
               ))}
               {card.members.length > 4 && (
-                <Avatar className="h-6 w-6 border-2 border-background">
+                <Avatar className="h-6 w-6 border-0">
                   <AvatarFallback className="text-[10px] bg-muted text-muted-foreground">
                     +{card.members.length - 4}
                   </AvatarFallback>

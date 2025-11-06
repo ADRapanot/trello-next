@@ -16,6 +16,7 @@ export interface Card {
   attachments?: number
   comments?: number
   checklist?: { completed: number; total: number }
+  isComplete?: boolean
 }
 
 export interface List {
