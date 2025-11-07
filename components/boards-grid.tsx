@@ -7,35 +7,11 @@ import { Card } from "@/components/ui/card"
 import { CreateBoardModal } from "@/components/create-board-modal"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { useBoardStore, type Board } from "@/store/boards-store"
 
-interface Board {
-  id: string
-  title: string
-  background: string
-  isFavorite: boolean
-}
-
-interface BoardsGridProps {
-  boards: Board[]
-  setBoards: (boards: Board[]) => void
-}
-
-export function BoardsGrid({ boards, setBoards }: BoardsGridProps) {
+export function BoardsGrid() {
   const [isModalOpen, setIsModalOpen] = useState(false)
-
-  const toggleFavorite = (id: string) => {
-    setBoards(boards.map((board) => (board.id === id ? { ...board, isFavorite: !board.isFavorite } : board)))
-  }
-
-  const addBoard = (title: string, background: string) => {
-    const newBoard: Board = {
-      id: Date.now().toString(),
-      title,
-      background,
-      isFavorite: false,
-    }
-    setBoards([...boards, newBoard])
-  }
+  const { boards, toggleFavorite, addBoard } = useBoardStore()
 
   const favoriteBoards = boards.filter((board) => board.isFavorite)
   const otherBoards = boards.filter((board) => !board.isFavorite)
@@ -74,7 +50,11 @@ export function BoardsGrid({ boards, setBoards }: BoardsGridProps) {
         </div>
       </section>
 
-      <CreateBoardModal open={isModalOpen} onOpenChange={setIsModalOpen} onCreateBoard={addBoard} />
+      <CreateBoardModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        onCreateBoard={(title, background, icon, description) => addBoard({ title, background, icon, description })}
+      />
     </div>
   )
 }
@@ -94,7 +74,10 @@ function BoardCard({ board, onToggleFavorite }: BoardCardProps) {
         )}
       >
         <div className="absolute inset-0 p-3 flex flex-col justify-between">
-          <h3 className="text-white font-semibold text-base leading-tight">{board.title}</h3>
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{board.icon}</span>
+            <h3 className="text-white font-semibold text-base leading-tight">{board.title}</h3>
+          </div>
           <Button
             variant="ghost"
             size="icon"

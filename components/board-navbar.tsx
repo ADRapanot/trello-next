@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowLeft, Star, MoreHorizontal, Image as ImageIcon } from "lucide-react"
+import { ArrowLeft, Star, MoreHorizontal, Image as ImageIcon, Activity as ActivityIcon, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import Link from "next/link"
@@ -10,14 +10,37 @@ import { NotificationsBell } from "@/components/notifications-bell"
 import { ButlerAutomation } from "@/components/butler-automation"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { BoardBackgroundSelector } from "@/components/board-background-selector"
+import { BoardFiltersPopover } from "@/components/board-filters-popover"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ActivityFeed } from "@/components/activity-feed"
+import { EditBoardModal } from "@/components/edit-board-modal"
+import { useBoardStore } from "@/store/boards-store"
 
 interface BoardNavbarProps {
+  boardId?: string
+  boardTitle?: string
   boardBackground?: string
   onBackgroundChange?: (background: string) => void
+  onFiltersChange?: (filters: { labels: string[]; members: string[]; dueDates: string[] }) => void
+  availableLabels?: string[]
+  availableMembers?: Array<{ id: string; name: string; avatar: string }>
 }
 
-export function BoardNavbar({ boardBackground, onBackgroundChange }: BoardNavbarProps) {
+export function BoardNavbar({
+  boardId,
+  boardTitle,
+  boardBackground,
+  onBackgroundChange,
+  onFiltersChange,
+  availableLabels = [],
+  availableMembers = [],
+}: BoardNavbarProps) {
   const [isBackgroundSelectorOpen, setIsBackgroundSelectorOpen] = useState(false)
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const { getBoardById, updateBoard } = useBoardStore()
+  const board = boardId ? (getBoardById(boardId) ?? null) : null
+  const resolvedTitle = boardTitle ?? "Product Roadmap"
   return (
     <nav className="border-b border-white/20 bg-black/10 backdrop-blur-sm">
       <div className="px-4 py-3 flex items-center justify-between gap-4">
@@ -27,7 +50,7 @@ export function BoardNavbar({ boardBackground, onBackgroundChange }: BoardNavbar
               <ArrowLeft className="h-5 w-5" />
             </Button>
           </Link>
-          <h1 className="text-white font-semibold text-lg">Product Roadmap</h1>
+          <h1 className="text-white font-semibold text-lg">{resolvedTitle}</h1>
           <Button variant="ghost" size="icon" className="text-white hover:bg-white/20">
             <Star className="h-4 w-4" />
           </Button>
@@ -39,6 +62,13 @@ export function BoardNavbar({ boardBackground, onBackgroundChange }: BoardNavbar
 
         <div className="flex items-center gap-2">
           <NotificationsBell />
+          {onFiltersChange && (
+            <BoardFiltersPopover
+              onFiltersChange={onFiltersChange}
+              availableLabels={availableLabels}
+              availableMembers={availableMembers}
+            />
+          )}
           <ButlerAutomation />
           <ThemeToggle />
           <DropdownMenu>
@@ -48,6 +78,14 @@ export function BoardNavbar({ boardBackground, onBackgroundChange }: BoardNavbar
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setIsEditModalOpen(true)}>
+                <Info className="h-4 w-4 mr-2" />
+                About Board
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsActivityModalOpen(true)}>
+                <ActivityIcon className="h-4 w-4 mr-2" />
+                Activity
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setIsBackgroundSelectorOpen(true)}>
                 <ImageIcon className="h-4 w-4 mr-2" />
                 Change Background
@@ -64,6 +102,31 @@ export function BoardNavbar({ boardBackground, onBackgroundChange }: BoardNavbar
             onBackgroundChange={onBackgroundChange}
           />
         )}
+
+        <Dialog open={isActivityModalOpen} onOpenChange={setIsActivityModalOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Board Activity</DialogTitle>
+              <DialogDescription>Review the latest updates happening across this board.</DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[60vh] overflow-y-auto pr-1">
+              <ActivityFeed boardId={boardId} />
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <EditBoardModal
+          board={board}
+          open={isEditModalOpen}
+          onOpenChange={setIsEditModalOpen}
+          onSave={(boardId, updates) => {
+            updateBoard(boardId, updates)
+            // Update the background immediately if it changed
+            if (updates.background && onBackgroundChange) {
+              onBackgroundChange(updates.background)
+            }
+          }}
+        />
       </div>
     </nav>
   )

@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,12 +38,12 @@ import {
   LinkIcon,
   ChevronDown,
 } from "lucide-react"
-import type { Card } from "@/components/kanban-board"
+import type { Card, Comment, Attachment, Checklist, ChecklistItem } from "@/store/types"
 import { format } from "date-fns"
 import { LabelManager, useLabelColor } from "@/components/label-manager"
 import { MembersManager, type Member } from "@/components/members-manager"
-import { AttachmentsManager, type Attachment } from "@/components/attachments-manager"
-import { CommentsManager, type Comment } from "@/components/comments-manager"
+import { AttachmentsManager } from "@/components/attachments-manager"
+import { CommentsManager } from "@/components/comments-manager"
 import { ActivityFeed } from "@/components/activity-feed"
 
 // Label badge component that uses the hook for proper hydration
@@ -75,22 +75,10 @@ interface CardDetailsModalProps {
   lists?: { id: string; title: string }[]
   onUpdateCard?: (listId: string, cardId: string, updatedCard: any) => void
   listId?: string
+  boardId?: string
   onArchiveCard?: (cardId: string, listId: string) => void
   onMoveCard?: (cardId: string, fromListId: string, toListId: string, toIndex: number) => void
   onDeleteCard?: (cardId: string, listId: string) => void
-}
-
-
-interface ChecklistItem {
-  id: string
-  text: string
-  completed: boolean
-}
-
-interface Checklist {
-  id: string
-  title: string
-  items: ChecklistItem[]
 }
 
 export function CardDetailsModal({ 
@@ -100,6 +88,7 @@ export function CardDetailsModal({
   lists = [], 
   onUpdateCard, 
   listId,
+  boardId,
   onArchiveCard,
   onMoveCard,
   onDeleteCard
@@ -108,7 +97,6 @@ export function CardDetailsModal({
   const [description, setDescription] = useState(card.description || "")
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [selectedLabels, setSelectedLabels] = useState<string[]>(() => {
-    // Deduplicate labels on initialization
     const labels = card.labels || []
     return Array.from(new Set(labels))
   })
@@ -136,41 +124,62 @@ export function CardDetailsModal({
   const [dueHour, setDueHour] = useState<string>(initialDueTime.hour.toString().padStart(2, '0'))
   const [dueMinute, setDueMinute] = useState<string>(initialDueTime.minute.toString().padStart(2, '0'))
   const [dueAmPm, setDueAmPm] = useState<'AM' | 'PM'>(initialDueTime.ampm)
-  const [checklists, setChecklists] = useState<Checklist[]>([
-    {
-      id: "1",
-      title: "Design Tasks",
-      items: [
-        { id: "1", text: "Research user requirements", completed: true },
-        { id: "2", text: "Create wireframes", completed: true },
-        { id: "3", text: "Design mockups", completed: false },
-        { id: "4", text: "Get feedback", completed: false },
-      ],
-    },
-  ])
-  const [comments, setComments] = useState<Comment[]>([
-    {
-      id: "1",
-      author: "John Doe",
-      avatar: "JD",
-      text: "This looks great! Let's move forward with this approach.",
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    },
-  ])
-  const [attachments, setAttachments] = useState<Attachment[]>([
-    {
-      id: "1",
-      name: "design-mockup.png",
-      size: "2.4 MB",
-      type: "image/png",
-      uploadedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      preview: "/placeholder.svg?height=100&width=100",
-    },
-  ])
+  const [checklists, setChecklists] = useState<Checklist[]>(card.checklists || [])
+  const [comments, setComments] = useState<Comment[]>(card.comments || [])
+  const [attachments, setAttachments] = useState<Attachment[]>(card.attachments || [])
 
   const [showMembersPopover, setShowMembersPopover] = useState(false)
   const [showLabelsPopover, setShowLabelsPopover] = useState(false)
   const [showDatePopover, setShowDatePopover] = useState(false)
+
+  const commitUpdate = useCallback(
+    (updates: Partial<Card>) => {
+      if (onUpdateCard && listId) {
+        onUpdateCard(listId, card.id, updates)
+      }
+    },
+    [onUpdateCard, listId, card.id],
+  )
+
+  const computeChecklistSummary = (lists: Checklist[]) => {
+    const total = lists.reduce((sum, checklist) => sum + checklist.items.length, 0)
+    const completed = lists.reduce(
+      (sum, checklist) => sum + checklist.items.filter((item) => item.completed).length,
+      0,
+    )
+    return total > 0 ? { completed, total } : undefined
+  }
+
+  const updateChecklists = useCallback(
+    (updater: (prev: Checklist[]) => Checklist[]) => {
+      setChecklists((prev) => {
+        const updated = updater(prev)
+        commitUpdate({ checklists: updated, checklist: computeChecklistSummary(updated) })
+        return updated
+      })
+    },
+    [commitUpdate],
+  )
+
+  useEffect(() => {
+    setSelectedMembers(card.members || [])
+  }, [card.members])
+
+  useEffect(() => {
+    setSelectedLabels(Array.from(new Set(card.labels || [])))
+  }, [card.labels])
+
+  useEffect(() => {
+    setComments(card.comments || [])
+  }, [card.comments])
+
+  useEffect(() => {
+    setAttachments(card.attachments || [])
+  }, [card.attachments])
+
+  useEffect(() => {
+    setChecklists(card.checklists || [])
+  }, [card.checklists])
 
   // Memoize date values to ensure stable dependencies
   const cardStartDate = useMemo(() => card.startDate ?? undefined, [card.startDate])
@@ -238,12 +247,6 @@ export function CardDetailsModal({
 
   const [newItemTexts, setNewItemTexts] = useState<{ [key: string]: string }>({})
 
-  // Sync labels when card prop changes
-  useEffect(() => {
-    const labels = card.labels || []
-    setSelectedLabels(Array.from(new Set(labels)))
-  }, [card.labels])
-
   const toggleLabel = (labelName: string) => {
     setSelectedLabels((prev) => {
       const isSelected = prev.includes(labelName)
@@ -256,7 +259,7 @@ export function CardDetailsModal({
   }
 
   const addChecklistItem = (checklistId: string, text: string) => {
-    setChecklists((prev) =>
+    updateChecklists((prev) =>
       prev.map((checklist) =>
         checklist.id === checklistId
           ? {
@@ -269,7 +272,7 @@ export function CardDetailsModal({
   }
 
   const toggleChecklistItem = (checklistId: string, itemId: string) => {
-    setChecklists((prev) =>
+    updateChecklists((prev) =>
       prev.map((checklist) =>
         checklist.id === checklistId
           ? {
@@ -284,7 +287,7 @@ export function CardDetailsModal({
   }
 
   const deleteChecklistItem = (checklistId: string, itemId: string) => {
-    setChecklists((prev) =>
+    updateChecklists((prev) =>
       prev.map((checklist) =>
         checklist.id === checklistId
           ? {
@@ -304,18 +307,23 @@ export function CardDetailsModal({
         items: [],
       }
 
-      if (selectedChecklistToCopy) {
-        const checklistToCopy = checklists.find((c) => c.id === selectedChecklistToCopy)
-        if (checklistToCopy) {
-          newChecklist.items = checklistToCopy.items.map((item) => ({
-            ...item,
-            id: `${Date.now()}-${Math.random()}`,
-            completed: false,
-          }))
+      updateChecklists((prev) => {
+        let itemsToCopy: Checklist | undefined
+        if (selectedChecklistToCopy) {
+          itemsToCopy = prev.find((c) => c.id === selectedChecklistToCopy)
         }
-      }
-
-      setChecklists([...checklists, newChecklist])
+        const checklistClone: Checklist = {
+          ...newChecklist,
+          items: itemsToCopy
+            ? itemsToCopy.items.map((item) => ({
+                ...item,
+                id: `${Date.now()}-${Math.random()}`,
+                completed: false,
+              }))
+            : [],
+        }
+        return [...prev, checklistClone]
+      })
       setNewChecklistTitle("")
       setSelectedChecklistToCopy("")
       setShowChecklistForm(false)
@@ -340,7 +348,9 @@ export function CardDetailsModal({
           preview: file.type.startsWith("image/") ? (e.target?.result as string) : undefined,
         }
 
-        setAttachments([...attachments, newAttachment])
+        const nextAttachments = [...attachments, newAttachment]
+        setAttachments(nextAttachments)
+        commitUpdate({ attachments: nextAttachments })
       }
 
       reader.readAsDataURL(file)
@@ -359,16 +369,18 @@ export function CardDetailsModal({
   const totalItems = checklists.reduce((sum, checklist) => sum + checklist.items.length, 0)
 
   const handleClose = () => {
-    if (onUpdateCard && listId) {
-      onUpdateCard(listId, card.id, {
-        title,
-        description,
-        labels: Array.from(new Set(selectedLabels)), // Ensure labels are deduplicated when saving
-        members: selectedMembers,
-        startDate: startDate ? startDate.toISOString() : undefined,
-        dueDate: dueDate ? dueDate.toISOString() : undefined,
-      })
-    }
+    commitUpdate({
+      title,
+      description,
+      labels: Array.from(new Set(selectedLabels)),
+      members: selectedMembers,
+      startDate: startDate ? startDate.toISOString() : undefined,
+      dueDate: dueDate ? dueDate.toISOString() : undefined,
+      attachments,
+      comments,
+      checklists,
+      checklist: computeChecklistSummary(checklists),
+    })
     onClose()
   }
 
@@ -422,14 +434,22 @@ export function CardDetailsModal({
               <div>
                 <h3 className="text-xs font-semibold text-muted-foreground mb-2">ADD TO CARD</h3>
                 <div className="flex flex-wrap gap-2">
-                  <MembersManager selectedMembers={selectedMembers} onMembersChange={setSelectedMembers} />
+                  <MembersManager
+                    selectedMembers={selectedMembers}
+                    onMembersChange={(members) => {
+                      setSelectedMembers(members)
+                      commitUpdate({ members })
+                    }}
+                  />
 
-                  <LabelManager 
-                    selectedLabels={selectedLabels} 
+                  <LabelManager
+                    selectedLabels={selectedLabels}
                     onLabelsChange={(labels) => {
-                      // Deduplicate labels when updated from LabelManager
-                      setSelectedLabels(Array.from(new Set(labels)))
-                    }} 
+                      const deduped = Array.from(new Set(labels))
+                      setSelectedLabels(deduped)
+                      commitUpdate({ labels: deduped })
+                    }}
+                    boardId={boardId}
                   />
 
                   <Popover open={showChecklistForm} onOpenChange={setShowChecklistForm}>
@@ -562,7 +582,9 @@ export function CardDetailsModal({
                                 disabled={(date) => {
                                   // Disable dates before start date if start date is enabled
                                   if (enableStartDate && tempStartDate) {
-                                    return date < tempStartDate
+                                    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+                                    const startDateOnly = new Date(tempStartDate.getFullYear(), tempStartDate.getMonth(), tempStartDate.getDate())
+                                    return dateOnly < startDateOnly
                                   }
                                   return false
                                 }}
@@ -606,7 +628,7 @@ export function CardDetailsModal({
                                         setDueHour(e.target.value.padStart(2, '0'))
                                       }
                                     }}
-                                    className="w-12 text-center"
+                                    className="w-16 text-center"
                                     placeholder="12"
                                   />
                                   <span className="text-muted-foreground">:</span>
@@ -645,7 +667,7 @@ export function CardDetailsModal({
                                         setDueMinute(e.target.value.padStart(2, '0'))
                                       }
                                     }}
-                                    className="w-12 text-center"
+                                    className="w-16 text-center"
                                     placeholder="00"
                                   />
                                 </div>
@@ -683,17 +705,18 @@ export function CardDetailsModal({
                         <div className="flex items-center gap-2 pt-2 border-t">
                           <Button
                             onClick={() => {
-                              if (enableStartDate && tempStartDate) {
-                                setStartDate(tempStartDate)
-                              } else {
-                                setStartDate(undefined)
-                              }
-                              if (tempDueDate) {
-                                const combinedDate = combineDateAndTime(tempDueDate, dueHour, dueMinute, dueAmPm)
-                                setDueDate(combinedDate || tempDueDate)
-                              } else {
-                                setDueDate(undefined)
-                              }
+                              const newStartDate = enableStartDate && tempStartDate ? tempStartDate : undefined
+                              const newDueDate = tempDueDate ? (combineDateAndTime(tempDueDate, dueHour, dueMinute, dueAmPm) || tempDueDate) : undefined
+                              
+                              setStartDate(newStartDate)
+                              setDueDate(newDueDate)
+                              
+                              // Commit changes immediately
+                              commitUpdate({
+                                startDate: newStartDate ? newStartDate.toISOString() : undefined,
+                                dueDate: newDueDate ? newDueDate.toISOString() : undefined,
+                              })
+                              
                               setShowDatePopover(false)
                             }}
                             className="flex-1"
@@ -711,6 +734,13 @@ export function CardDetailsModal({
                               setDueHour('12')
                               setDueMinute('00')
                               setDueAmPm('PM')
+                              
+                              // Commit removal immediately
+                              commitUpdate({
+                                startDate: undefined,
+                                dueDate: undefined,
+                              })
+                              
                               setShowDatePopover(false)
                             }}
                             variant="outline"
@@ -797,6 +827,7 @@ export function CardDetailsModal({
                         <Badge variant="outline" className="gap-2">
                           <Clock className="h-3 w-3" />
                           Start: {format(startDate, "MMMM d, yyyy")}
+                          {startDate.getHours() !== 0 || startDate.getMinutes() !== 0 ? ` at ${format(startDate, "h:mm a")}` : ''}
                         </Badge>
                       </div>
                     )}
@@ -805,6 +836,7 @@ export function CardDetailsModal({
                         <Badge variant="outline" className="gap-2">
                           <Clock className="h-3 w-3" />
                           Due: {format(dueDate, "MMMM d, yyyy")}
+                          {dueDate.getHours() !== 0 || dueDate.getMinutes() !== 0 ? ` at ${format(dueDate, "h:mm a")}` : ''}
                         </Badge>
                       </div>
                     )}
@@ -926,7 +958,13 @@ export function CardDetailsModal({
                   <Paperclip className="h-4 w-4 text-muted-foreground" />
                   <h3 className="text-sm font-semibold">Attachments</h3>
                 </div>
-                <AttachmentsManager attachments={attachments} onAttachmentsChange={setAttachments} />
+                <AttachmentsManager
+                  attachments={attachments}
+                  onAttachmentsChange={(next) => {
+                    setAttachments(next)
+                    commitUpdate({ attachments: next })
+                  }}
+                />
               </div>
 
               {checklists.length > 0 && checklists.map((checklist) => {
@@ -998,19 +1036,21 @@ export function CardDetailsModal({
             </div>
 
             <div className="w-1/2 border-l overflow-y-auto px-4 py-4 space-y-6 bg-muted/20">
-              {comments.length > 0 && (
-                <>
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                      <h3 className="text-sm font-semibold">Comments</h3>
-                    </div>
-                    <CommentsManager comments={comments} onCommentsChange={setComments} />
-                  </div>
-                  <Separator />
-                </>
-              )}
-              <ActivityFeed />
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Comments</h3>
+                </div>
+                <CommentsManager
+                  comments={comments}
+                  onCommentsChange={(next) => {
+                    setComments(next)
+                    commitUpdate({ comments: next })
+                  }}
+                />
+              </div>
+              <Separator />
+              <ActivityFeed boardId={boardId} />
             </div>
           </div>
         </DialogContent>

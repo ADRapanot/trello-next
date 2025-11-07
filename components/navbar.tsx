@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useTheme } from "@/components/theme-provider"
+import { useBoardStore } from "@/store/boards-store"
 
 interface NavbarProps {
   currentBoard: string
@@ -19,10 +20,11 @@ interface NavbarProps {
   onMenuClick: () => void
 }
 
-const boards = ["Product Roadmap", "Marketing Campaign", "Design System", "Sprint Planning"]
-
 export function Navbar({ currentBoard, onBoardChange, onMenuClick }: NavbarProps) {
   const { theme, toggleTheme } = useTheme()
+  const { boards } = useBoardStore()
+  const boardTitles = boards.map((board) => board.title)
+  const displayedBoard = currentBoard || boardTitles[0] || "Select a board"
 
   return (
     <header className="h-14 border-b border-border bg-primary text-primary-foreground flex items-center px-4 gap-3 shrink-0">
@@ -47,18 +49,18 @@ export function Navbar({ currentBoard, onBoardChange, onMenuClick }: NavbarProps
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="text-primary-foreground hover:bg-primary-foreground/10 gap-1">
-            {currentBoard}
+            {displayedBoard}
             <ChevronDown className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
           {boards.map((board) => (
             <DropdownMenuItem
-              key={board}
-              onClick={() => onBoardChange(board)}
-              className={currentBoard === board ? "bg-accent" : ""}
+              key={board.id}
+              onClick={() => onBoardChange(board.title)}
+              className={displayedBoard === board.title ? "bg-accent" : ""}
             >
-              {board}
+              {board.title}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>

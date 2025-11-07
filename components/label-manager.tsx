@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Tag, Plus, X, Check } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
+import { useKanbanStore } from "@/store/kanban-store"
 
 export interface Label {
   id: string
@@ -21,6 +22,7 @@ interface LabelManagerProps {
   selectedLabels?: string[]
   onLabelsChange?: (labels: string[]) => void
   trigger?: React.ReactNode
+  boardId?: string
 }
 
 const defaultColors = [
@@ -133,8 +135,9 @@ export const updateLabelColorCache = () => {
   }
 }
 
-export function LabelManager({ selectedLabels = [], onLabelsChange, trigger }: LabelManagerProps) {
+export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boardId }: LabelManagerProps) {
   const [labels, setLabels] = useState<Label[]>(getStoredLabels())
+  const { renameLabelGlobally, deleteLabelGlobally } = useKanbanStore()
   
   // Save to localStorage whenever labels change
   const updateLabels = (newLabels: Label[]) => {
@@ -186,6 +189,11 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger }: L
     if (selectedLabels.includes(label.name)) {
       onLabelsChange?.(selectedLabels.filter((name) => name !== label.name))
     }
+
+    // Remove label from all cards in the current board
+    if (boardId) {
+      deleteLabelGlobally(boardId, label.name)
+    }
   }
 
   const startEditLabel = (label: Label) => {
@@ -205,6 +213,13 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger }: L
     const oldName = label.name
     const newName = editingLabelName.trim()
 
+    // Don't do anything if the name hasn't changed
+    if (oldName === newName) {
+      setEditingLabelId(null)
+      setEditingLabelName("")
+      return
+    }
+
     // Update label name
     updateLabels(labels.map((l) => (l.id === labelId ? { ...l, name: newName } : l)))
 
@@ -212,6 +227,11 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger }: L
     if (selectedLabels.includes(oldName)) {
       const newSelectedLabels = selectedLabels.map((name) => (name === oldName ? newName : name))
       onLabelsChange?.(newSelectedLabels)
+    }
+
+    // Rename label on all cards in the current board
+    if (boardId) {
+      renameLabelGlobally(boardId, oldName, newName)
     }
 
     setEditingLabelId(null)

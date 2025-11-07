@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef, useCallback } from "react"
 import { Search, Calendar, MessageSquare, Paperclip } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -9,74 +9,9 @@ import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { SearchFiltersPopover, type SearchFilters } from "@/components/search-filters-popover"
 import { CardDetailsModal } from "@/components/card-details-modal"
-import type { Card } from "@/components/kanban-board"
-
-// Mock data for demonstration - in a real app, this would come from a global state or API
-const mockBoards = [
-  {
-    id: "1",
-    title: "Product Roadmap",
-    lists: [
-      {
-        id: "1",
-        title: "To Do",
-        cards: [
-          {
-            id: "1",
-            title: "Research user feedback",
-            description: "Gather and analyze user feedback from the last quarter",
-            labels: ["Research", "High Priority"],
-            members: [{ id: "1", name: "John Doe", avatar: "JD" }],
-            dueDate: "2025-01-15",
-            comments: 3,
-          },
-          {
-            id: "2",
-            title: "Design new landing page",
-            description: "Create mockups for the new landing page design",
-            labels: ["Design"],
-            members: [{ id: "3", name: "Alice Johnson", avatar: "AJ" }],
-            attachments: 2,
-          },
-        ],
-      },
-      {
-        id: "2",
-        title: "In Progress",
-        cards: [
-          {
-            id: "4",
-            title: "Implement authentication",
-            description: "Add OAuth and JWT authentication to the application",
-            labels: ["Development", "High Priority"],
-            members: [{ id: "1", name: "John Doe", avatar: "JD" }],
-            dueDate: "2025-01-10",
-            comments: 5,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: "2",
-    title: "Marketing Campaign",
-    lists: [
-      {
-        id: "3",
-        title: "Planning",
-        cards: [
-          {
-            id: "5",
-            title: "Q1 Marketing Strategy",
-            description: "Plan marketing activities for Q1 2025",
-            labels: ["Marketing", "Planning"],
-            members: [{ id: "2", name: "Jane Smith", avatar: "JS" }],
-          },
-        ],
-      },
-    ],
-  },
-]
+import type { Card } from "@/store/types"
+import { useBoardStore } from "@/store/boards-store"
+import { useKanbanStore } from "@/store/kanban-store"
 
 interface SearchResult {
   cardId: string
@@ -102,12 +37,35 @@ export function GlobalSearch() {
     dueDates: [],
     keywords: [],
   })
-  const [selectedCard, setSelectedCard] = useState<Card | null>(null)
+  const [selectedCardRef, setSelectedCardRef] = useState<{ boardId: string; listId: string; cardId: string } | null>(
+    null,
+  )
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [selectedListId, setSelectedListId] = useState<string>("")
   const inputRef = useRef<HTMLInputElement>(null)
+  const { boards } = useBoardStore()
+  const { getLists } = useKanbanStore()
 
-  const matchesFilters = (result: SearchResult): boolean => {
+  const boardData = useMemo(
+    () =>
+      boards.map((board) => ({
+        ...board,
+        lists: getLists(board.id),
+      })),
+    [boards, getLists],
+  )
+
+  const findCard = useCallback(
+    (boardId: string, listId: string, cardId: string): Card | null => {
+      const lists = getLists(boardId)
+      const list = lists.find((l) => l.id === listId)
+      if (!list) return null
+      const card = list.cards.find((c) => c.id === cardId)
+      return card ?? null
+    },
+    [getLists],
+  )
+
+  const matchesFilters = useCallback((result: SearchResult): boolean => {
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
@@ -167,7 +125,7 @@ export function GlobalSearch() {
     }
 
     return true
-  }
+  }, [filters])
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return []
@@ -175,7 +133,7 @@ export function GlobalSearch() {
     const query = searchQuery.toLowerCase()
     const results: SearchResult[] = []
 
-    mockBoards.forEach((board) => {
+    boardData.forEach((board) => {
       board.lists.forEach((list) => {
         list.cards.forEach((card) => {
           const titleMatch = card.title.toLowerCase().includes(query)
@@ -194,21 +152,20 @@ export function GlobalSearch() {
               labels: card.labels,
               members: card.members,
               dueDate: card.dueDate,
-              comments: card.comments,
-              attachments: card.attachments,
+              comments: card.comments?.length,
+              attachments: card.attachments?.length,
             })
           }
         })
       })
     })
 
-    // Apply filters to search results
     return results.filter(matchesFilters)
-  }, [searchQuery, filters])
+  }, [searchQuery, filters, boardData, matchesFilters])
 
-  const getAllLabels = (): string[] => {
+  const availableLabels = useMemo(() => {
     const labels = new Set<string>()
-    mockBoards.forEach((board) => {
+    boardData.forEach((board) => {
       board.lists.forEach((list) => {
         list.cards.forEach((card) => {
           card.labels?.forEach((label) => labels.add(label))
@@ -216,11 +173,11 @@ export function GlobalSearch() {
       })
     })
     return Array.from(labels).sort()
-  }
+  }, [boardData])
 
-  const getAllMembers = (): Array<{ id: string; name: string; avatar: string }> => {
+  const availableMembers = useMemo(() => {
     const memberMap = new Map<string, { id: string; name: string; avatar: string }>()
-    mockBoards.forEach((board) => {
+    boardData.forEach((board) => {
       board.lists.forEach((list) => {
         list.cards.forEach((card) => {
           card.members?.forEach((member) => {
@@ -232,33 +189,19 @@ export function GlobalSearch() {
       })
     })
     return Array.from(memberMap.values())
-  }
+  }, [boardData])
+
+  const selectedCard = useMemo(() => {
+    if (!selectedCardRef) return null
+    return findCard(selectedCardRef.boardId, selectedCardRef.listId, selectedCardRef.cardId)
+  }, [selectedCardRef, findCard])
 
   const handleSelectCard = (result: SearchResult) => {
-    // Find the actual card data from mockBoards
-    const board = mockBoards.find((b) => b.id === result.boardId)
-    if (!board) return
-
-    const list = board.lists.find((l) => l.id === result.listId)
-    if (!list) return
-
-    const card = list.cards.find((c) => c.id === result.cardId)
-    if (!card) return
-
-    // Convert the card to the Card type expected by CardDetailsModal
-    const cardData: Card = {
-      id: card.id,
-      title: card.title,
-      description: card.description,
-      labels: card.labels,
-      members: card.members,
-      dueDate: card.dueDate,
-      attachments: card.attachments,
-      comments: card.comments,
-    }
-
-    setSelectedCard(cardData)
-    setSelectedListId(result.listId)
+    setSelectedCardRef({
+      boardId: result.boardId,
+      listId: result.listId,
+      cardId: result.cardId,
+    })
     setIsModalOpen(true)
     setOpen(false)
     setSearchQuery("")
@@ -380,8 +323,8 @@ export function GlobalSearch() {
       {/* Add filter popover next to search */}
       <SearchFiltersPopover
         onFiltersChange={setFilters}
-        availableLabels={getAllLabels()}
-        availableMembers={getAllMembers()}
+        availableLabels={availableLabels}
+        availableMembers={availableMembers}
       />
 
       {/* Card Details Modal */}
@@ -391,9 +334,9 @@ export function GlobalSearch() {
           isOpen={isModalOpen}
           onClose={() => {
             setIsModalOpen(false)
-            setSelectedCard(null)
+            setSelectedCardRef(null)
           }}
-          listId={selectedListId}
+          listId={selectedCardRef?.listId}
         />
       )}
     </div>

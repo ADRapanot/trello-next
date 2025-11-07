@@ -10,15 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Paperclip, Upload, MoreHorizontal, Trash2, Edit2, Download, ImageIcon, FileText } from "lucide-react"
 import { format } from "date-fns"
 
-export interface Attachment {
-  id: string
-  name: string
-  size: string
-  type: string
-  uploadedAt: Date
-  url?: string
-  preview?: string
-}
+import type { Attachment } from "@/store/types"
 
 interface AttachmentsManagerProps {
   attachments: Attachment[]

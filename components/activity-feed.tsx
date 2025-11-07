@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -26,41 +26,11 @@ import {
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 
-export type ActivityType =
-  | "card_moved"
-  | "label_added"
-  | "label_removed"
-  | "member_added"
-  | "member_removed"
-  | "attachment_added"
-  | "attachment_removed"
-  | "checklist_added"
-  | "checklist_item_completed"
-  | "checklist_item_uncompleted"
-  | "comment_added"
-  | "due_date_added"
-  | "due_date_changed"
-  | "due_date_removed"
-  | "card_archived"
-  | "card_copied"
-
-export interface Activity {
-  id: string
-  type: ActivityType
-  user: {
-    name: string
-    avatar: string
-  }
-  timestamp: Date
-  details: {
-    description: string
-    from?: string
-    to?: string
-    itemName?: string
-  }
-}
+import type { Activity, ActivityType } from "@/store/types"
+import { useKanbanStore } from "@/store/kanban-store"
 
 interface ActivityFeedProps {
+  boardId?: string
   activities?: Activity[]
 }
 
@@ -206,9 +176,19 @@ const defaultActivities: Activity[] = [
   },
 ]
 
-export function ActivityFeed({ activities = defaultActivities }: ActivityFeedProps) {
+export function ActivityFeed({ boardId, activities: activitiesProp }: ActivityFeedProps) {
+  const { getActivities } = useKanbanStore()
+  const activities = useMemo(() => {
+    if (boardId) {
+      const boardActivities = getActivities(boardId)
+      if (boardActivities.length > 0) {
+        return boardActivities
+      }
+    }
+    return activitiesProp ?? defaultActivities
+  }, [boardId, getActivities, activitiesProp])
   const [selectedFilters, setSelectedFilters] = useState<ActivityType[]>([])
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(true)
 
   const filterOptions: { label: string; types: ActivityType[] }[] = [
     { label: "All", types: [] },

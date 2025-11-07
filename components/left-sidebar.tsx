@@ -1,24 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Plus, User, Tag, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { MembersManager, type Member } from "@/components/members-manager"
 import { LabelManager } from "@/components/label-manager"
 import { ShareBoardModal } from "@/components/share-board-modal"
-import Link from "next/link"
-
-const MOCK_BOARDS = [
-  { id: "1", name: "Product Roadmap", icon: "🚀" },
-  { id: "2", name: "Marketing Campaign", icon: "📢" },
-  { id: "3", name: "Design System", icon: "🎨" },
-  { id: "4", name: "Sprint Planning", icon: "⚡" },
-]
+import { CreateBoardModal } from "@/components/create-board-modal"
+import { EditBoardModal } from "@/components/edit-board-modal"
+import { useBoardStore, type Board } from "@/store/boards-store"
+import { useRouter } from "next/navigation"
 
 export function LeftSidebar() {
   const [selectedMembers, setSelectedMembers] = useState<Member[]>([])
   const [selectedLabels, setSelectedLabels] = useState<string[]>([])
+  const { boards, addBoard, updateBoard } = useBoardStore()
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [editingBoard, setEditingBoard] = useState<Board | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const router = useRouter()
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   return (
     <aside className="w-64 bg-gradient-to-br from-blue-600/30 to-blue-800/40 backdrop-blur-sm border-r border-white/10 flex-shrink-0">
@@ -35,21 +37,47 @@ export function LeftSidebar() {
               Boards
             </h3>
             <div className="space-y-1">
-              {MOCK_BOARDS.map((board) => (
-                <Link key={board.id} href={`/board/${board.id}`}>
+              {boards.map((board) => (
+                <div
+                  key={board.id}
+                  onDoubleClick={(e) => {
+                    e.preventDefault()
+                    if (clickTimeoutRef.current) {
+                      clearTimeout(clickTimeoutRef.current)
+                      clickTimeoutRef.current = null
+                    }
+                    setEditingBoard(board)
+                    setIsEditModalOpen(true)
+                  }}
+                  onClick={(e) => {
+                    // Clear any existing timeout
+                    if (clickTimeoutRef.current) {
+                      clearTimeout(clickTimeoutRef.current)
+                    }
+                    // Set a timeout for single click navigation
+                    clickTimeoutRef.current = setTimeout(() => {
+                      router.push(`/board/${board.id}`)
+                      clickTimeoutRef.current = null
+                    }, 250)
+                  }}
+                >
                   <Button
                     variant="ghost"
                     className="w-full justify-start gap-2 h-9 text-white/90 hover:bg-white/10 hover:text-white/90"
+                    asChild
                   >
-                    <span className="text-base">{board.icon}</span>
-                    <span className="text-sm">{board.name}</span>
+                    <div>
+                      <span className="text-base">{board.icon}</span>
+                      <span className="text-sm">{board.title}</span>
+                    </div>
                   </Button>
-                </Link>
+                </div>
               ))}
             </div>
             <Button
               variant="ghost"
               className="w-full justify-start gap-2 h-9 text-white/70 hover:bg-white/10 hover:text-white/70"
+              onClick={() => setIsCreateModalOpen(true)}
             >
               <Plus className="h-4 w-4" />
               <span className="text-sm">Add board</span>
@@ -109,6 +137,21 @@ export function LeftSidebar() {
           </div>
         </div>
       </ScrollArea>
+      <CreateBoardModal
+        open={isCreateModalOpen}
+        onOpenChange={setIsCreateModalOpen}
+        onCreateBoard={(title, background, icon, description) => {
+          addBoard({ title, background, icon, description })
+        }}
+      />
+      <EditBoardModal
+        board={editingBoard}
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        onSave={(boardId, updates) => {
+          updateBoard(boardId, updates)
+        }}
+      />
     </aside>
   )
 }

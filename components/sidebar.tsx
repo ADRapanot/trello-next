@@ -4,6 +4,8 @@ import { LayoutDashboard, Users, Settings, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
+import { useMemo } from "react"
+import { useBoardStore } from "@/store/boards-store"
 
 interface SidebarProps {
   isOpen: boolean
@@ -11,27 +13,27 @@ interface SidebarProps {
   onBoardSelect: (board: string) => void
 }
 
-const workspaces = [
-  {
-    name: "Personal Workspace",
-    boards: [
-      { name: "Product Roadmap", icon: "🚀" },
-      { name: "Marketing Campaign", icon: "📢" },
-      { name: "Design System", icon: "🎨" },
-      { name: "Sprint Planning", icon: "⚡" },
-    ],
-  },
-  {
-    name: "Team Workspace",
-    boards: [
-      { name: "Q1 Goals", icon: "🎯" },
-      { name: "Bug Tracking", icon: "🐛" },
-      { name: "Feature Requests", icon: "💡" },
-    ],
-  },
-]
-
 export function Sidebar({ isOpen, currentBoard, onBoardSelect }: SidebarProps) {
+  const { boards } = useBoardStore()
+
+  const workspaces = useMemo(
+    () => [
+      {
+        name: "Personal Workspace",
+        boards: boards.map((board) => ({ name: board.title, icon: board.icon || "📋" })),
+      },
+      {
+        name: "Team Workspace",
+        boards: [
+          { name: "Q1 Goals", icon: "🎯" },
+          { name: "Bug Tracking", icon: "🐛" },
+          { name: "Feature Requests", icon: "💡" },
+        ],
+      },
+    ],
+    [boards],
+  )
+
   if (!isOpen) return null
 
   return (

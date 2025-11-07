@@ -75,11 +75,8 @@ export function DateInput({
     const value = e.target.value
     setInputValue(value)
     
-    // Try to parse the input
-    const parsedDate = parseDate(value)
-    if (parsedDate) {
-      onDateChange(parsedDate)
-    }
+    // Don't call onDateChange while typing - only on blur or calendar selection
+    // This prevents the parent from recreating the date and resetting the input
   }
 
   const handleInputBlur = () => {
@@ -98,48 +95,43 @@ export function DateInput({
     }
   }
 
-  const handleInputClick = () => {
-    // Open calendar when clicking the input
-    setOpen(true)
-  }
-
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <div className="relative">
-        <Input
-          type="text"
-          value={inputValue}
-          onChange={handleInputChange}
-          onBlur={handleInputBlur}
-          onClick={handleInputClick}
-          placeholder={placeholder}
-          className={cn("pr-8", className)}
-        />
-        <button
-          type="button"
-          className="absolute right-0 top-0 h-full px-3 flex items-center justify-center hover:bg-accent rounded-r-md z-10"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            setOpen(!open)
-          }}
-        >
-          <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-        </button>
-      </div>
-      <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          mode="single"
-          selected={date}
-          onSelect={(selectedDate) => {
-            onDateChange(selectedDate)
-            setOpen(false)
-          }}
-          disabled={disabled}
-          initialFocus
-        />
-      </PopoverContent>
-    </Popover>
+    <div className="relative">
+      <Input
+        type="text"
+        value={inputValue}
+        onChange={handleInputChange}
+        onBlur={handleInputBlur}
+        placeholder={placeholder}
+        className={cn("pr-8", className)}
+      />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="absolute right-0 top-0 h-full px-3 flex items-center justify-center hover:bg-accent rounded-r-md transition-colors"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+          >
+            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={(selectedDate) => {
+              onDateChange(selectedDate)
+              setOpen(false)
+            }}
+            disabled={disabled}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
   )
 }
 

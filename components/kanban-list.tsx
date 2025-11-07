@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { KanbanCard } from "@/components/kanban-card"
-import type { List } from "@/components/kanban-board"
+import type { List } from "@/store/types"
 
 interface KanbanListProps {
   list: List
+  boardId: string
   onMoveCard: (cardId: string, fromListId: string, toListId: string, toIndex: number) => void
   onAddCard: (listId: string, title: string) => void
   onArchiveList: (listId: string) => void
@@ -27,6 +28,7 @@ interface KanbanListProps {
 
 export function KanbanList({
   list,
+  boardId,
   onMoveCard,
   onAddCard,
   onArchiveList,
@@ -211,6 +213,7 @@ export function KanbanList({
               card={card}
               listId={list.id}
               index={index}
+              boardId={boardId}
               onMoveCard={onMoveCard}
               onArchiveCard={onArchiveCard}
               allLists={allLists}

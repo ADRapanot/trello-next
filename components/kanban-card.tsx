@@ -9,7 +9,7 @@ import { Clock, MessageSquare, Paperclip, MoreHorizontal } from "lucide-react"
 import { CardDetailsModal } from "@/components/card-details-modal"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import type { Card as CardType } from "@/components/kanban-board"
+import type { Card as CardType } from "@/store/types"
 import { useLabelColor } from "@/components/label-manager"
 
 // Label badge component that uses the hook for proper hydration
@@ -28,6 +28,7 @@ interface KanbanCardProps {
   card: CardType
   listId: string
   index: number
+  boardId: string
   onMoveCard: (cardId: string, fromListId: string, toListId: string, toIndex: number) => void
   onArchiveCard?: (cardId: string, listId: string) => void
   allLists?: { id: string; title: string }[]
@@ -38,6 +39,7 @@ export function KanbanCard({
   card,
   listId,
   index,
+  boardId,
   onMoveCard,
   onArchiveCard,
   allLists,
@@ -219,7 +221,7 @@ export function KanbanCard({
                 e.stopPropagation()
                 const newCompleteState = !isComplete
                 setIsComplete(newCompleteState)
-                onUpdateCard?.(listId, card.id, { ...card, isComplete: newCompleteState })
+                onUpdateCard?.(listId, card.id, { isComplete: newCompleteState })
               }}
               className={`
                 absolute left-0 top-1/2 -translate-y-1/2
@@ -260,35 +262,42 @@ export function KanbanCard({
           {/* Metadata badges */}
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             {/* Due date */}
-            {card.dueDate && (
-              <Badge
-                variant="outline"
-                className={`gap-1 ${
-                  isOverdue
-                    ? "bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400"
-                    : isDueSoon
-                      ? "bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-400"
-                      : ""
-                }`}
-              >
-                <Clock className="h-3 w-3" />
-                {new Date(card.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-              </Badge>
-            )}
+            {card.dueDate && (() => {
+              const dueDateTime = new Date(card.dueDate)
+              const hasTime = dueDateTime.getHours() !== 0 || dueDateTime.getMinutes() !== 0
+              const dateStr = dueDateTime.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+              const timeStr = hasTime ? dueDateTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }) : null
+              
+              return (
+                <Badge
+                  variant="outline"
+                  className={`gap-1 ${
+                    isOverdue
+                      ? "bg-red-100 text-red-700 border-red-300 dark:bg-red-950 dark:text-red-400"
+                      : isDueSoon
+                        ? "bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-950 dark:text-yellow-400"
+                        : ""
+                  }`}
+                >
+                  <Clock className="h-3 w-3" />
+                  {dateStr}{timeStr ? ` ${timeStr}` : ''}
+                </Badge>
+              )
+            })()}
 
             {/* Attachments */}
-            {card.attachments && card.attachments > 0 && (
+            {(card.attachments?.length ?? 0) > 0 && (
               <Badge variant="outline" className="gap-1">
                 <Paperclip className="h-3 w-3" />
-                {card.attachments}
+                {card.attachments?.length}
               </Badge>
             )}
 
             {/* Comments */}
-            {card.comments && card.comments > 0 && (
+            {(card.comments?.length ?? 0) > 0 && (
               <Badge variant="outline" className="gap-1">
                 <MessageSquare className="h-3 w-3" />
-                {card.comments}
+                {card.comments?.length}
               </Badge>
             )}
           </div>
@@ -322,6 +331,7 @@ export function KanbanCard({
         lists={allLists}
         onUpdateCard={onUpdateCard}
         listId={listId}
+        boardId={boardId}
       />
     </>
   )

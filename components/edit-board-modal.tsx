@@ -1,17 +1,19 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import type { Board } from "@/store/boards-store"
 
-interface CreateBoardModalProps {
+interface EditBoardModalProps {
+  board: Board | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCreateBoard: (title: string, background: string, icon: string, description?: string) => void
+  onSave: (boardId: string, updates: { title: string; background: string; icon: string; description?: string }) => void
 }
 
 const backgroundOptions = [
@@ -19,62 +21,78 @@ const backgroundOptions = [
   { id: "2", class: "bg-gradient-to-br from-purple-500 to-purple-700", name: "Purple Dream" },
   { id: "3", class: "bg-gradient-to-br from-green-500 to-green-700", name: "Forest Green" },
   { id: "4", class: "bg-gradient-to-br from-orange-500 to-orange-700", name: "Sunset Orange" },
-  { id: "5", class: "bg-gradient-to-br from-pink-500 to-pink-700", name: "Pink Blossom" },
-  { id: "6", class: "bg-gradient-to-br from-teal-500 to-teal-700", name: "Teal Wave" },
+  { id: "5", class: "bg-gradient-to-br from-pink-500 to-pink-700", name: "Pink Blush" },
+  { id: "6", class: "bg-gradient-to-br from-teal-500 to-teal-700", name: "Teal Waters" },
   { id: "7", class: "bg-gradient-to-br from-red-500 to-red-700", name: "Ruby Red" },
   { id: "8", class: "bg-gradient-to-br from-indigo-500 to-indigo-700", name: "Indigo Night" },
 ]
 
 const avatarOptions = [
   { id: "rocket", icon: "🚀", name: "Rocket" },
-  { id: "lightbulb", icon: "💡", name: "Idea" },
-  { id: "palette", icon: "🎨", name: "Palette" },
+  { id: "star", icon: "⭐", name: "Star" },
+  { id: "fire", icon: "🔥", name: "Fire" },
+  { id: "heart", icon: "❤️", name: "Heart" },
+  { id: "lightbulb", icon: "💡", name: "Lightbulb" },
   { id: "target", icon: "🎯", name: "Target" },
-  { id: "megaphone", icon: "📣", name: "Megaphone" },
-  { id: "chart", icon: "📊", name: "Analytics" },
-  { id: "gear", icon: "⚙️", name: "Settings" },
+  { id: "chart", icon: "📊", name: "Chart" },
   { id: "sparkles", icon: "✨", name: "Sparkles" },
+  { id: "palette", icon: "🎨", name: "Palette" },
+  { id: "megaphone", icon: "📣", name: "Megaphone" },
+  { id: "trophy", icon: "🏆", name: "Trophy" },
+  { id: "books", icon: "📚", name: "Books" },
 ]
 
-export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBoardModalProps) {
+export function EditBoardModal({ board, open, onOpenChange, onSave }: EditBoardModalProps) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [selectedBackground, setSelectedBackground] = useState(backgroundOptions[0].class)
   const [selectedAvatar, setSelectedAvatar] = useState(avatarOptions[0].icon)
 
-  const handleCreate = () => {
-    if (title.trim()) {
-      onCreateBoard(title, selectedBackground, selectedAvatar, description.trim() || undefined)
-      setTitle("")
-      setDescription("")
-      setSelectedBackground(backgroundOptions[0].class)
-      setSelectedAvatar(avatarOptions[0].icon)
+  useEffect(() => {
+    if (board) {
+      setTitle(board.title)
+      setDescription(board.description || "")
+      setSelectedBackground(board.background)
+      setSelectedAvatar(board.icon)
+    }
+  }, [board])
+
+  const handleSave = () => {
+    if (board && title.trim()) {
+      onSave(board.id, {
+        title,
+        background: selectedBackground,
+        icon: selectedAvatar,
+        description: description.trim() || undefined,
+      })
       onOpenChange(false)
     }
   }
+
+  if (!board) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Create Board</DialogTitle>
+          <DialogTitle>Edit Board</DialogTitle>
         </DialogHeader>
         <div className="space-y-6 py-4">
           <div className="space-y-2">
-            <Label htmlFor="title">Board Title</Label>
+            <Label htmlFor="edit-title">Board Title</Label>
             <Input
-              id="title"
+              id="edit-title"
               placeholder="Enter board title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleCreate()}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSave()}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description (Optional)</Label>
+            <Label htmlFor="edit-description">Description (Optional)</Label>
             <Textarea
-              id="description"
+              id="edit-description"
               placeholder="Add a description for this board..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -89,6 +107,7 @@ export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBo
               {backgroundOptions.map((bg) => (
                 <button
                   key={bg.id}
+                  type="button"
                   className={cn(
                     "h-16 rounded-lg transition-all",
                     bg.class,
@@ -107,6 +126,7 @@ export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBo
               {avatarOptions.map((avatar) => (
                 <button
                   key={avatar.id}
+                  type="button"
                   className={cn(
                     "h-12 rounded-lg border border-transparent bg-white/10 text-2xl flex items-center justify-center transition-colors",
                     selectedAvatar === avatar.icon
@@ -115,7 +135,6 @@ export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBo
                   )}
                   onClick={() => setSelectedAvatar(avatar.icon)}
                   title={avatar.name}
-                  type="button"
                 >
                   <span>{avatar.icon}</span>
                 </button>
@@ -127,8 +146,8 @@ export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBo
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={!title.trim()}>
-              Create Board
+            <Button onClick={handleSave} disabled={!title.trim()}>
+              Save Changes
             </Button>
           </div>
         </div>
@@ -136,3 +155,4 @@ export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBo
     </Dialog>
   )
 }
+

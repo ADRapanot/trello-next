@@ -7,13 +7,7 @@ import { Separator } from "@/components/ui/separator"
 import { Bold, Italic, Underline, List, ListOrdered, LinkIcon, Trash2, Edit2 } from "lucide-react"
 import { format } from "date-fns"
 
-export interface Comment {
-  id: string
-  author: string
-  avatar: string
-  text: string
-  timestamp: Date
-}
+import type { Comment } from "@/store/types"
 
 interface CommentsManagerProps {
   comments: Comment[]
