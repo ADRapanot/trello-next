@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useDrag, useDrop } from "react-dnd"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +10,19 @@ import { CardDetailsModal } from "@/components/card-details-modal"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { Card as CardType } from "@/components/kanban-board"
+import { useLabelColor } from "@/components/label-manager"
+
+// Label badge component that uses the hook for proper hydration
+function LabelBadge({ label }: { label: string }) {
+  const color = useLabelColor(label)
+  return (
+    <span
+      className={`${color} text-xs px-2 py-0.5 rounded-full text-white font-medium`}
+    >
+      {label}
+    </span>
+  )
+}
 
 interface KanbanCardProps {
   card: CardType
@@ -19,17 +32,6 @@ interface KanbanCardProps {
   onArchiveCard?: (cardId: string, listId: string) => void
   allLists?: { id: string; title: string }[]
   onUpdateCard?: (listId: string, cardId: string, updatedCard: any) => void
-}
-
-const labelColors: Record<string, string> = {
-  Research: "bg-blue-500",
-  Design: "bg-purple-500",
-  Development: "bg-green-500",
-  Documentation: "bg-yellow-500",
-  Review: "bg-orange-500",
-  Setup: "bg-teal-500",
-  DevOps: "bg-pink-500",
-  "High Priority": "bg-red-500",
 }
 
 export function KanbanCard({
@@ -47,6 +49,9 @@ export function KanbanCard({
   const [showMenu, setShowMenu] = useState(false)
   const [isComplete, setIsComplete] = useState(card.isComplete || false)
   const [isHovered, setIsHovered] = useState(false)
+  const lastHoveredItemRef = useRef<{ id: string; listId: string; index: number } | null>(null)
+  const draggedItemIdRef = useRef<string | null>(null)
+  const isMovingRef = useRef(false)
 
   // Sync local state with card prop when it changes
   useEffect(() => {
@@ -61,19 +66,68 @@ export function KanbanCard({
     }),
   })
 
+  // Reset hover ref when dragging ends
+  useEffect(() => {
+    if (!isDragging) {
+      lastHoveredItemRef.current = null
+      draggedItemIdRef.current = null
+      isMovingRef.current = false
+    }
+  }, [isDragging])
+
+  const handleHover = useCallback((item: { id: string; listId: string; index: number }, monitor: any) => {
+    if (item.id === card.id) {
+      draggedItemIdRef.current = null
+      isMovingRef.current = false
+      return
+    }
+    
+    // Track the dragged item
+    draggedItemIdRef.current = item.id
+    
+    // Don't move if we're hovering over the same position
+    const lastHovered = lastHoveredItemRef.current
+    if (
+      lastHovered &&
+      lastHovered.id === item.id &&
+      lastHovered.listId === listId &&
+      lastHovered.index === index
+    ) {
+      return
+    }
+    
+    // Prevent rapid updates
+    if (isMovingRef.current) {
+      return
+    }
+    
+    // Only move if the position actually changed
+    lastHoveredItemRef.current = { id: item.id, listId, index }
+    isMovingRef.current = true
+    onMoveCard(item.id, item.listId, listId, index)
+    item.listId = listId
+    item.index = index
+    
+    // Reset moving flag after state settles using requestAnimationFrame
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        isMovingRef.current = false
+      })
+    })
+  }, [card.id, listId, index, onMoveCard])
+
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: "CARD",
-    hover: (item: { id: string; listId: string; index: number }) => {
-      if (item.id !== card.id) {
-        onMoveCard(item.id, item.listId, listId, index)
-        item.listId = listId
-        item.index = index
+    hover: handleHover,
+    collect: (monitor) => {
+      const item = monitor.getItem() as { id: string } | null
+      const isDraggedCard = item?.id === card.id
+      // Don't show indicator if it's the dragged card itself
+      return {
+        isOver: !isDraggedCard && monitor.isOver({ shallow: true }),
+        canDrop: monitor.canDrop(),
       }
     },
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-      canDrop: monitor.canDrop(),
-    }),
   })
 
   const handleCardClick = () => {
@@ -105,7 +159,10 @@ export function KanbanCard({
       )}
 
       <div 
-        ref={(node) => drag(drop(node))} 
+        ref={(node) => {
+          const dropRef = drop(node)
+          drag(dropRef || node)
+        }} 
         className="relative group"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -147,12 +204,8 @@ export function KanbanCard({
           {/* Labels */}
           {card.labels && card.labels.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-1.5">
-              {card.labels.map((label) => (
-                <div
-                  key={label}
-                  className={`${labelColors[label] || "bg-gray-500"} h-2 w-10 rounded-full`}
-                  title={label}
-                />
+              {Array.from(new Set(card.labels)).map((label, index) => (
+                <LabelBadge key={`${label}-${index}`} label={label} />
               ))}
             </div>
           )}

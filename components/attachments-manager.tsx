@@ -31,6 +31,10 @@ export function AttachmentsManager({ attachments, onAttachmentsChange }: Attachm
     open: false,
     attachment: null,
   })
+  const [previewDialog, setPreviewDialog] = useState<{ open: boolean; attachment: Attachment | null }>({
+    open: false,
+    attachment: null,
+  })
   const [newName, setNewName] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -116,7 +120,8 @@ export function AttachmentsManager({ attachments, onAttachmentsChange }: Attachm
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+        onClick={() => fileInputRef.current?.click()}
+        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
           isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
         }`}
       >
@@ -129,7 +134,14 @@ export function AttachmentsManager({ attachments, onAttachmentsChange }: Attachm
         />
         <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
         <p className="text-sm text-muted-foreground mb-2">Drag and drop files here, or click to browse</p>
-        <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={(e) => {
+            e.stopPropagation()
+            fileInputRef.current?.click()
+          }}
+        >
           <Paperclip className="h-4 w-4 mr-2" />
           Choose Files
         </Button>
@@ -157,7 +169,15 @@ export function AttachmentsManager({ attachments, onAttachmentsChange }: Attachm
 
               {/* File Info */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" title={attachment.name}>
+                <p 
+                  className="text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors" 
+                  title={attachment.name}
+                  onClick={() => {
+                    if (attachment.url) {
+                      setPreviewDialog({ open: true, attachment })
+                    }
+                  }}
+                >
                   {truncateName(attachment.name, 30)}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -220,6 +240,89 @@ export function AttachmentsManager({ attachments, onAttachmentsChange }: Attachm
               Rename
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Dialog */}
+      <Dialog open={previewDialog.open} onOpenChange={(open) => setPreviewDialog({ open, attachment: null })}>
+        <DialogContent 
+          className="!w-screen !h-screen !max-w-none !max-h-none overflow-hidden !p-0 !m-0 !rounded-none !top-0 !left-0 !translate-x-0 !translate-y-0"
+          style={{
+            width: '100vw',
+            height: '100vh',
+            maxWidth: '100vw',
+            maxHeight: '100vh',
+            top: 0,
+            left: 0,
+            transform: 'none',
+            margin: 0,
+            padding: 0,
+            borderRadius: 0,
+          }}
+        >
+          <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
+            <DialogTitle className="truncate">
+              {previewDialog.attachment?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div 
+            className="overflow-hidden w-full p-0 flex items-center justify-center bg-muted/20"
+            style={{
+              height: 'calc(100vh - 80px)',
+              width: '100%',
+            }}
+          >
+            {previewDialog.attachment && (
+              <>
+                {previewDialog.attachment.type.startsWith("image/") && previewDialog.attachment.url ? (
+                  <img
+                    src={previewDialog.attachment.url}
+                    alt={previewDialog.attachment.name}
+                    className="w-full h-full object-contain"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                    }}
+                  />
+                ) : previewDialog.attachment.type === "application/pdf" && previewDialog.attachment.url ? (
+                  <iframe
+                    src={previewDialog.attachment.url}
+                    className="w-full h-full border-0"
+                    title={previewDialog.attachment.name}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                    }}
+                  />
+                ) : previewDialog.attachment.type.startsWith("video/") && previewDialog.attachment.url ? (
+                  <video
+                    src={previewDialog.attachment.url}
+                    controls
+                    className="w-full h-full object-contain"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                    }}
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <div className="text-center py-12">
+                    <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-muted-foreground mb-4">Preview not available for this file type</p>
+                    {previewDialog.attachment.url && (
+                      <Button asChild>
+                        <a href={previewDialog.attachment.url} download={previewDialog.attachment.name}>
+                          <Download className="h-4 w-4 mr-2" />
+                          Download File
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

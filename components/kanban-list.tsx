@@ -21,6 +21,8 @@ interface KanbanListProps {
   onCopyList?: (listId: string) => void
   allLists?: { id: string; title: string }[]
   onUpdateCard?: (listId: string, cardId: string, updatedCard: any) => void
+  onMoveList?: (listId: string, toIndex: number) => void
+  listIndex?: number
 }
 
 export function KanbanList({
@@ -33,6 +35,8 @@ export function KanbanList({
   onCopyList,
   allLists,
   onUpdateCard,
+  onMoveList,
+  listIndex = 0,
 }: KanbanListProps) {
   const [isAddingCard, setIsAddingCard] = useState(false)
   const [newCardTitle, setNewCardTitle] = useState("")
@@ -43,13 +47,13 @@ export function KanbanList({
 
   const [{ isDragging }, drag, preview] = useDrag({
     type: "LIST",
-    item: { id: list.id },
+    item: { id: list.id, index: listIndex },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
   })
 
-  const [{ isOver, canDrop }, drop] = useDrop({
+  const [{ isOver: isOverCard, canDrop: canDropCard }, dropCard] = useDrop({
     accept: "CARD",
     drop: (item: { id: string; listId: string }, monitor) => {
       if (!monitor.didDrop()) {
@@ -61,6 +65,42 @@ export function KanbanList({
       canDrop: monitor.canDrop(),
     }),
   })
+
+  const [{ isOver: isOverList, canDrop: canDropList }, dropList] = useDrop({
+    accept: "LIST",
+    drop: (item: { id: string; index: number }, monitor) => {
+      if (!monitor.didDrop() && onMoveList && item.id !== list.id) {
+        // Calculate target index: if dragging from left, insert after current list
+        // If dragging from right, insert before current list
+        const draggedIndex = item.index
+        let targetIndex: number
+        
+        if (draggedIndex < listIndex) {
+          // Dragging from left to right: insert after current list
+          targetIndex = listIndex + 1
+        } else {
+          // Dragging from right to left: insert before current list
+          targetIndex = listIndex
+        }
+        
+        onMoveList(item.id, targetIndex)
+      }
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver({ shallow: true }),
+      canDrop: monitor.canDrop(),
+    }),
+  })
+
+  // Combine both drop refs
+  const drop = (node: HTMLDivElement | null) => {
+    dropCard(node)
+    dropList(node)
+  }
+
+  // Combined visual feedback
+  const isOver = isOverCard || isOverList
+  const canDrop = canDropCard || canDropList
 
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {
@@ -96,14 +136,20 @@ export function KanbanList({
 
   return (
     <div
-      ref={(node) => preview(drop(node))}
+      ref={drop}
       className={`flex-shrink-0 w-72 transition-all duration-200 ${isDragging ? "opacity-50 scale-95" : "opacity-100 scale-100"}`}
     >
       <Card
-        className={`bg-muted/50 backdrop-blur-sm rounded-xl transition-all duration-200 ${isOver && canDrop ? "ring-2 ring-primary shadow-lg scale-[1.02]" : ""}`}
+        className={`bg-gray-200 rounded-xl transition-all duration-200 py-0 ${
+          isOverList && canDropList 
+            ? "ring-2 ring-primary shadow-lg scale-[1.02] border-primary" 
+            : isOverCard && canDropCard
+            ? "ring-2 ring-blue-500 shadow-md"
+            : ""
+        }`}
       >
         <div className="flex items-center gap-2 p-3 pb-2">
-          <div ref={drag} className="cursor-grab active:cursor-grabbing">
+          <div ref={drag as any} className="cursor-grab active:cursor-grabbing">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
 

@@ -8,13 +8,40 @@ import { KanbanBoard } from "@/components/kanban-board"
 import { LeftSidebar } from "@/components/left-sidebar"
 
 export default function BoardPage() {
-  const [boardBackground] = useState("bg-gradient-to-br from-blue-500 to-blue-700")
+  const [boardBackground, setBoardBackground] = useState("bg-gradient-to-br from-blue-500 to-blue-700")
+
+  const handleBackgroundChange = (background: string) => {
+    setBoardBackground(background)
+  }
+
+  // Determine if background is a CSS class or image URL
+  const getBackgroundStyle = () => {
+    if (boardBackground.startsWith("url(")) {
+      return {
+        backgroundImage: boardBackground,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }
+    }
+    return {}
+  }
+
+  const getBackgroundClassName = () => {
+    if (boardBackground.startsWith("url(")) {
+      return ""
+    }
+    return boardBackground
+  }
 
   return (
     <ThemeProvider>
       <DndWrapper>
-        <div className={`min-h-screen flex flex-col ${boardBackground}`}>
-          <BoardNavbar />
+        <div
+          className={`min-h-screen flex flex-col ${getBackgroundClassName()}`}
+          style={getBackgroundStyle()}
+        >
+          <BoardNavbar boardBackground={boardBackground} onBackgroundChange={handleBackgroundChange} />
           <div className="flex-1 flex overflow-hidden">
             <LeftSidebar />
             <main className="flex-1 overflow-hidden">

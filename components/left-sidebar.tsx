@@ -39,7 +39,7 @@ export function LeftSidebar() {
                 <Link key={board.id} href={`/board/${board.id}`}>
                   <Button
                     variant="ghost"
-                    className="w-full justify-start gap-2 h-9 text-white/90 hover:bg-white/10"
+                    className="w-full justify-start gap-2 h-9 text-white/90 hover:bg-white/10 hover:text-white/90"
                   >
                     <span className="text-base">{board.icon}</span>
                     <span className="text-sm">{board.name}</span>
@@ -49,7 +49,7 @@ export function LeftSidebar() {
             </div>
             <Button
               variant="ghost"
-              className="w-full justify-start gap-2 h-9 text-white/70 hover:bg-white/10"
+              className="w-full justify-start gap-2 h-9 text-white/70 hover:bg-white/10 hover:text-white/70"
             >
               <Plus className="h-4 w-4" />
               <span className="text-sm">Add board</span>
@@ -67,7 +67,7 @@ export function LeftSidebar() {
               trigger={
                 <Button
                   variant="ghost"
-                  className="w-full justify-between h-9 text-white/90 hover:bg-white/10"
+                  className="w-full justify-between h-9 text-white/90 hover:bg-white/10 hover:text-white/90"
                 >
                   <span className="text-sm">Members</span>
                   <User className="h-4 w-4" />
@@ -84,7 +84,7 @@ export function LeftSidebar() {
               trigger={
                 <Button
                   variant="ghost"
-                  className="w-full justify-between h-9 text-white/90 hover:bg-white/10"
+                  className="w-full justify-between h-9 text-white/90 hover:bg-white/10 hover:text-white/90"
                 >
                   <span className="text-sm">Labels</span>
                   <Tag className="h-4 w-4" />
@@ -99,7 +99,7 @@ export function LeftSidebar() {
               trigger={
                 <Button
                   variant="ghost"
-                  className="w-full justify-between h-9 text-white/90 hover:bg-white/10"
+                  className="w-full justify-between h-9 text-white/90 hover:bg-white/10 hover:text-white/90"
                 >
                   <span className="text-sm">Share</span>
                   <Share2 className="h-4 w-4" />

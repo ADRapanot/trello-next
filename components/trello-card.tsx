@@ -3,6 +3,26 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
+interface TrelloCardProps {
+  dueDate?: Date
+  complete?: boolean
+  isOverdue?: boolean
+  isDueToday?: boolean
+  isDueSoon?: boolean
+  attachments?: number
+  comments?: number
+  checklistProgress?: {
+    completed: number
+    total: number
+  }
+  checklistPercentage?: number
+  members?: Array<{
+    id: string
+    name: string
+    avatar: string
+  }>
+}
+
 const TrelloCard = ({
   dueDate,
   complete,
@@ -14,7 +34,7 @@ const TrelloCard = ({
   checklistProgress,
   checklistPercentage,
   members,
-}) => {
+}: TrelloCardProps) => {
   return (
     <div>
       <div className="flex flex-wrap items-center text-xs mb-1 gap-2">

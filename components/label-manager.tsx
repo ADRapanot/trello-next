@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,12 +47,107 @@ const defaultLabels: Label[] = [
   { id: "8", name: "DevOps", color: "bg-pink-500" },
 ]
 
+// Store labels in localStorage to persist across components
+const STORAGE_KEY = 'trello-labels'
+
+// Initialize labels from localStorage or use defaults
+const getStoredLabels = (): Label[] => {
+  if (typeof window === 'undefined') return defaultLabels
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch (e) {
+    // If parsing fails, use defaults
+  }
+  return defaultLabels
+}
+
+// Save labels to localStorage
+const saveLabels = (labels: Label[]) => {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(labels))
+  } catch (e) {
+    // Ignore storage errors
+  }
+}
+
+// Cache for label colors to prevent hydration mismatches
+let labelColorCache: Map<string, string> | null = null
+let isCacheInitialized = false
+
+// Initialize cache on client side only
+const initializeCache = () => {
+  if (typeof window === 'undefined' || isCacheInitialized) return
+  const labels = getStoredLabels()
+  labelColorCache = new Map()
+  labels.forEach((label) => {
+    labelColorCache!.set(label.name, label.color)
+  })
+  isCacheInitialized = true
+}
+
+// Export function to get label color by name (client-safe)
+export const getLabelColor = (labelName: string): string => {
+  // During SSR, return default
+  if (typeof window === 'undefined') {
+    const defaultLabel = defaultLabels.find((l) => l.name === labelName)
+    return defaultLabel?.color || "bg-gray-500"
+  }
+  
+  // Initialize cache on first client-side call
+  if (!isCacheInitialized) {
+    initializeCache()
+  }
+  
+  // Return from cache or default
+  return labelColorCache?.get(labelName) || "bg-gray-500"
+}
+
+// Hook to get label color with proper hydration handling
+export const useLabelColor = (labelName: string): string => {
+  const [color, setColor] = useState<string>(() => {
+    // Initial render: use default to match SSR
+    const defaultLabel = defaultLabels.find((l) => l.name === labelName)
+    return defaultLabel?.color || "bg-gray-500"
+  })
+  
+  useEffect(() => {
+    // After hydration, update from localStorage
+    const labels = getStoredLabels()
+    const label = labels.find((l) => l.name === labelName)
+    setColor(label?.color || "bg-gray-500")
+  }, [labelName])
+  
+  return color
+}
+
+// Update cache when labels change
+export const updateLabelColorCache = () => {
+  isCacheInitialized = false
+  labelColorCache = null
+  if (typeof window !== 'undefined') {
+    initializeCache()
+  }
+}
+
 export function LabelManager({ selectedLabels = [], onLabelsChange, trigger }: LabelManagerProps) {
-  const [labels, setLabels] = useState<Label[]>(defaultLabels)
+  const [labels, setLabels] = useState<Label[]>(getStoredLabels())
+  
+  // Save to localStorage whenever labels change
+  const updateLabels = (newLabels: Label[]) => {
+    setLabels(newLabels)
+    saveLabels(newLabels)
+    updateLabelColorCache() // Invalidate cache when labels change
+  }
   const [isCreating, setIsCreating] = useState(false)
   const [newLabelName, setNewLabelName] = useState("")
   const [selectedColor, setSelectedColor] = useState(defaultColors[0])
   const [open, setOpen] = useState(false)
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null)
+  const [editingLabelName, setEditingLabelName] = useState("")
 
   const toggleLabel = (labelId: string) => {
     const label = labels.find((l) => l.id === labelId)
@@ -75,7 +170,7 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger }: L
       color: selectedColor.value,
     }
 
-    setLabels([...labels, newLabel])
+    updateLabels([...labels, newLabel])
     setNewLabelName("")
     setSelectedColor(defaultColors[0])
     setIsCreating(false)
@@ -85,12 +180,47 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger }: L
     const label = labels.find((l) => l.id === labelId)
     if (!label) return
 
-    setLabels(labels.filter((l) => l.id !== labelId))
+    updateLabels(labels.filter((l) => l.id !== labelId))
 
     // Remove from selected labels if it was selected
     if (selectedLabels.includes(label.name)) {
       onLabelsChange?.(selectedLabels.filter((name) => name !== label.name))
     }
+  }
+
+  const startEditLabel = (label: Label) => {
+    setEditingLabelId(label.id)
+    setEditingLabelName(label.name)
+  }
+
+  const saveEditLabel = (labelId: string) => {
+    if (!editingLabelName.trim()) {
+      setEditingLabelId(null)
+      return
+    }
+
+    const label = labels.find((l) => l.id === labelId)
+    if (!label) return
+
+    const oldName = label.name
+    const newName = editingLabelName.trim()
+
+    // Update label name
+    updateLabels(labels.map((l) => (l.id === labelId ? { ...l, name: newName } : l)))
+
+    // Update selected labels if the label was selected
+    if (selectedLabels.includes(oldName)) {
+      const newSelectedLabels = selectedLabels.map((name) => (name === oldName ? newName : name))
+      onLabelsChange?.(newSelectedLabels)
+    }
+
+    setEditingLabelId(null)
+    setEditingLabelName("")
+  }
+
+  const cancelEditLabel = () => {
+    setEditingLabelId(null)
+    setEditingLabelName("")
   }
 
   return (
@@ -118,6 +248,7 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger }: L
             <div className="space-y-1 pb-3">
               {labels.map((label) => {
                 const isSelected = selectedLabels.includes(label.name)
+                const isEditing = editingLabelId === label.id
 
                 return (
                   <div key={label.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-accent group">
@@ -125,22 +256,65 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger }: L
                       checked={isSelected}
                       onCheckedChange={() => toggleLabel(label.id)}
                       className="flex-shrink-0"
+                      disabled={isEditing}
                     />
-                    <Badge
-                      className={`${label.color} text-white flex-1 justify-start cursor-pointer hover:opacity-90`}
-                      onClick={() => toggleLabel(label.id)}
-                    >
-                      {label.name}
-                    </Badge>
-                    {isSelected && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 opacity-0 group-hover:opacity-100 flex-shrink-0"
-                      onClick={() => deleteLabel(label.id)}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
+                    {isEditing ? (
+                      <div className="flex-1 flex items-center gap-2">
+                        <Input
+                          value={editingLabelName}
+                          onChange={(e) => setEditingLabelName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              saveEditLabel(label.id)
+                            } else if (e.key === "Escape") {
+                              cancelEditLabel()
+                            }
+                          }}
+                          className="h-7 text-xs"
+                          autoFocus
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 flex-shrink-0"
+                          onClick={() => saveEditLabel(label.id)}
+                          disabled={!editingLabelName.trim()}
+                        >
+                          <Check className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 flex-shrink-0"
+                          onClick={cancelEditLabel}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <Badge
+                          className={`${label.color} text-white flex-1 justify-start cursor-pointer hover:opacity-90`}
+                          onClick={() => toggleLabel(label.id)}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation()
+                            startEditLabel(label)
+                          }}
+                          title="Double-click to rename"
+                        >
+                          {label.name}
+                        </Badge>
+                        {isSelected && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 flex-shrink-0"
+                          onClick={() => deleteLabel(label.id)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 )
               })}

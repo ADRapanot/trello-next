@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { KanbanList } from "@/components/kanban-list"
 import { AddListForm } from "@/components/add-list-form"
+import { BoardFiltersPopover } from "@/components/board-filters-popover"
 
 export interface Card {
   id: string
@@ -12,6 +13,7 @@ export interface Card {
   description?: string
   labels?: string[]
   members?: { id: string; name: string; avatar: string }[]
+  startDate?: string
   dueDate?: string
   attachments?: number
   comments?: number
@@ -102,11 +104,22 @@ const initialLists: List[] = [
   },
 ]
 
+interface FilterState {
+  labels: string[]
+  members: string[]
+  dueDates: string[]
+}
+
 export function KanbanBoard() {
   const [lists, setLists] = useState<List[]>(initialLists)
   const [isAddingList, setIsAddingList] = useState(false)
   const [archivedCards, setArchivedCards] = useState<{ cardId: string; listId: string }[]>([])
   const [archivedLists, setArchivedLists] = useState<List[]>([])
+  const [filters, setFilters] = useState<FilterState>({
+    labels: [],
+    members: [],
+    dueDates: [],
+  })
 
   const moveCard = (cardId: string, fromListId: string, toListId: string, toIndex: number) => {
     setLists((prevLists) => {
@@ -119,8 +132,33 @@ export function KanbanBoard() {
       const cardIndex = fromList.cards.findIndex((card) => card.id === cardId)
       if (cardIndex === -1) return prevLists
 
+      // Prevent unnecessary update if card is already in the correct position
+      if (fromListId === toListId && cardIndex === toIndex) {
+        return prevLists
+      }
+
       const [card] = fromList.cards.splice(cardIndex, 1)
       toList.cards.splice(toIndex, 0, card)
+
+      return newLists
+    })
+  }
+
+  const moveList = (listId: string, toIndex: number) => {
+    setLists((prevLists) => {
+      const newLists = [...prevLists]
+      const fromIndex = newLists.findIndex((list) => list.id === listId)
+      
+      if (fromIndex === -1) return prevLists
+
+      // Prevent unnecessary update if list is already in the correct position
+      if (fromIndex === toIndex) return prevLists
+
+      // Adjust target index if dragging from a position before the target
+      const adjustedIndex = fromIndex < toIndex ? toIndex - 1 : toIndex
+
+      const [list] = newLists.splice(fromIndex, 1)
+      newLists.splice(adjustedIndex, 0, list)
 
       return newLists
     })
@@ -221,23 +259,109 @@ export function KanbanBoard() {
     )
   }
 
+  // Get all available labels and members from board data
+  const availableLabels = useMemo(() => {
+    const labelSet = new Set<string>()
+    lists.forEach((list) => {
+      list.cards.forEach((card) => {
+        card.labels?.forEach((label) => labelSet.add(label))
+      })
+    })
+    return Array.from(labelSet).sort()
+  }, [lists])
+
+  const availableMembers = useMemo(() => {
+    const memberMap = new Map<string, { id: string; name: string; avatar: string }>()
+    lists.forEach((list) => {
+      list.cards.forEach((card) => {
+        card.members?.forEach((member) => {
+          if (!memberMap.has(member.id)) {
+            memberMap.set(member.id, member)
+          }
+        })
+      })
+    })
+    return Array.from(memberMap.values())
+  }, [lists])
+
+  // Check if a card matches the current filters
+  const cardMatchesFilters = useMemo(() => {
+    return (card: Card): boolean => {
+      // If no filters are active, show all cards
+      if (filters.labels.length === 0 && filters.members.length === 0 && filters.dueDates.length === 0) {
+        return true
+      }
+
+      // Check label filter
+      if (filters.labels.length > 0) {
+        const hasMatchingLabel = card.labels?.some((label) => filters.labels.includes(label))
+        if (!hasMatchingLabel) return false
+      }
+
+      // Check member filter
+      if (filters.members.length > 0) {
+        const hasMatchingMember = card.members?.some((member) => filters.members.includes(member.id))
+        if (!hasMatchingMember) return false
+      }
+
+      // Check due date filter
+      if (filters.dueDates.length > 0) {
+        if (!card.dueDate) return false // If filtering by due date but card has no due date, exclude it
+        
+        const cardDate = new Date(card.dueDate)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const cardDateOnly = new Date(cardDate)
+        cardDateOnly.setHours(0, 0, 0, 0)
+
+        const isOverdue = filters.dueDates.includes("overdue") && cardDateOnly < today
+        const isToday = filters.dueDates.includes("today") && cardDateOnly.getTime() === today.getTime()
+
+        if (!isOverdue && !isToday) return false
+      }
+
+      return true
+    }
+  }, [filters])
+
+  // Filter cards and lists based on filters
+  const filteredLists = useMemo(() => {
+    return lists.map((list) => ({
+      ...list,
+      cards: list.cards.filter(cardMatchesFilters),
+    })).filter((list) => list.cards.length > 0) // Only show lists that have matching cards
+  }, [lists, cardMatchesFilters])
+
   return (
     <div className="h-full overflow-x-auto overflow-y-hidden">
-      <div className="flex gap-4 p-4 h-full">
-        {lists.map((list) => (
-          <KanbanList
-            key={list.id}
-            list={list}
-            onMoveCard={moveCard}
-            onAddCard={addCard}
-            onArchiveList={archiveList}
-            onArchiveCard={archiveCard}
-            onRenameList={renameList}
-            onCopyList={copyList}
-            allLists={lists.map((l) => ({ id: l.id, title: l.title }))}
-            onUpdateCard={updateCard}
-          />
-        ))}
+      <div className="flex items-center justify-end gap-2 px-4 pt-2 pb-2 text-white">
+        <BoardFiltersPopover
+          onFiltersChange={setFilters}
+          availableLabels={availableLabels}
+          availableMembers={availableMembers}
+        />
+      </div>
+      <div className="flex gap-4 px-4 h-full">
+        {filteredLists.map((list, index) => {
+          // Find the original index in the unfiltered lists
+          const originalIndex = lists.findIndex((l) => l.id === list.id)
+          return (
+            <KanbanList
+              key={list.id}
+              list={list}
+              listIndex={originalIndex >= 0 ? originalIndex : index}
+              onMoveCard={moveCard}
+              onAddCard={addCard}
+              onArchiveList={archiveList}
+              onArchiveCard={archiveCard}
+              onRenameList={renameList}
+              onCopyList={copyList}
+              allLists={lists.map((l) => ({ id: l.id, title: l.title }))}
+              onUpdateCard={updateCard}
+              onMoveList={moveList}
+            />
+          )
+        })}
 
         {isAddingList ? (
           <AddListForm onAdd={addList} onCancel={() => setIsAddingList(false)} />

@@ -184,15 +184,47 @@
     cursor: grabbing !important;
   }
 
+  /* Global scrollbar styling to match site design */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-foreground) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--muted-foreground);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 0.2s ease;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--foreground);
+    opacity: 0.6;
+  }
+
+  *::-webkit-scrollbar-thumb:active {
+    background-color: var(--primary);
+  }
+
   /* Smooth scrolling for horizontal board */
   .board-scroll {
     scroll-behavior: smooth;
     scrollbar-width: thin;
-    scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
+    scrollbar-color: var(--muted-foreground) transparent;
   }
 
   .board-scroll::-webkit-scrollbar {
-    height: 8px;
+    height: 10px;
   }
 
   .board-scroll::-webkit-scrollbar-track {
@@ -200,11 +232,20 @@
   }
 
   .board-scroll::-webkit-scrollbar-thumb {
-    background-color: rgba(155, 155, 155, 0.5);
-    border-radius: 20px;
+    background-color: var(--muted-foreground);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 0.2s ease;
   }
 
   .board-scroll::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(155, 155, 155, 0.7);
+    background-color: var(--foreground);
+    opacity: 0.6;
   }
+
+  .board-scroll::-webkit-scrollbar-thumb:active {
+    background-color: var(--primary);
+  }
+
 }

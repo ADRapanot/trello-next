@@ -8,6 +8,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { SearchFiltersPopover, type SearchFilters } from "@/components/search-filters-popover"
+import { CardDetailsModal } from "@/components/card-details-modal"
+import type { Card } from "@/components/kanban-board"
 
 // Mock data for demonstration - in a real app, this would come from a global state or API
 const mockBoards = [
@@ -100,6 +102,9 @@ export function GlobalSearch() {
     dueDates: [],
     keywords: [],
   })
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedListId, setSelectedListId] = useState<string>("")
   const inputRef = useRef<HTMLInputElement>(null)
 
   const matchesFilters = (result: SearchResult): boolean => {
@@ -230,7 +235,31 @@ export function GlobalSearch() {
   }
 
   const handleSelectCard = (result: SearchResult) => {
-    window.location.href = `/board/${result.boardId}?card=${result.cardId}`
+    // Find the actual card data from mockBoards
+    const board = mockBoards.find((b) => b.id === result.boardId)
+    if (!board) return
+
+    const list = board.lists.find((l) => l.id === result.listId)
+    if (!list) return
+
+    const card = list.cards.find((c) => c.id === result.cardId)
+    if (!card) return
+
+    // Convert the card to the Card type expected by CardDetailsModal
+    const cardData: Card = {
+      id: card.id,
+      title: card.title,
+      description: card.description,
+      labels: card.labels,
+      members: card.members,
+      dueDate: card.dueDate,
+      attachments: card.attachments,
+      comments: card.comments,
+    }
+
+    setSelectedCard(cardData)
+    setSelectedListId(result.listId)
+    setIsModalOpen(true)
     setOpen(false)
     setSearchQuery("")
   }
@@ -354,6 +383,19 @@ export function GlobalSearch() {
         availableLabels={getAllLabels()}
         availableMembers={getAllMembers()}
       />
+
+      {/* Card Details Modal */}
+      {selectedCard && (
+        <CardDetailsModal
+          card={selectedCard}
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false)
+            setSelectedCard(null)
+          }}
+          listId={selectedListId}
+        />
+      )}
     </div>
   )
 }

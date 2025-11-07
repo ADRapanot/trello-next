@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { useState, useEffect, useMemo } from "react"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -13,6 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DateInput } from "@/components/ui/date-input"
 import {
   X,
   Clock,
@@ -38,11 +40,33 @@ import {
 } from "lucide-react"
 import type { Card } from "@/components/kanban-board"
 import { format } from "date-fns"
-import { LabelManager } from "@/components/label-manager"
+import { LabelManager, useLabelColor } from "@/components/label-manager"
 import { MembersManager, type Member } from "@/components/members-manager"
 import { AttachmentsManager, type Attachment } from "@/components/attachments-manager"
 import { CommentsManager, type Comment } from "@/components/comments-manager"
 import { ActivityFeed } from "@/components/activity-feed"
+
+// Label badge component that uses the hook for proper hydration
+function LabelBadge({ label, onRemove }: { label: string; onRemove?: () => void }) {
+  const color = useLabelColor(label)
+  return (
+    <Badge className={`${color} text-white gap-2 flex items-center`}>
+      {label}
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+          className="ml-1 hover:opacity-70 focus:outline-none"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </Badge>
+  )
+}
 
 interface CardDetailsModalProps {
   card: Card
@@ -51,18 +75,11 @@ interface CardDetailsModalProps {
   lists?: { id: string; title: string }[]
   onUpdateCard?: (listId: string, cardId: string, updatedCard: any) => void
   listId?: string
+  onArchiveCard?: (cardId: string, listId: string) => void
+  onMoveCard?: (cardId: string, fromListId: string, toListId: string, toIndex: number) => void
+  onDeleteCard?: (cardId: string, listId: string) => void
 }
 
-const labelColors = [
-  { name: "Research", color: "bg-blue-500" },
-  { name: "Design", color: "bg-purple-500" },
-  { name: "Development", color: "bg-green-500" },
-  { name: "Documentation", color: "bg-yellow-500" },
-  { name: "Review", color: "bg-orange-500" },
-  { name: "Setup", color: "bg-teal-500" },
-  { name: "DevOps", color: "bg-pink-500" },
-  { name: "High Priority", color: "bg-red-500" },
-]
 
 interface ChecklistItem {
   id: string
@@ -76,13 +93,49 @@ interface Checklist {
   items: ChecklistItem[]
 }
 
-export function CardDetailsModal({ card, isOpen, onClose, lists = [], onUpdateCard, listId }: CardDetailsModalProps) {
+export function CardDetailsModal({ 
+  card, 
+  isOpen, 
+  onClose, 
+  lists = [], 
+  onUpdateCard, 
+  listId,
+  onArchiveCard,
+  onMoveCard,
+  onDeleteCard
+}: CardDetailsModalProps) {
   const [title, setTitle] = useState(card.title)
   const [description, setDescription] = useState(card.description || "")
   const [isEditingDescription, setIsEditingDescription] = useState(false)
-  const [selectedLabels, setSelectedLabels] = useState<string[]>(card.labels || [])
+  const [selectedLabels, setSelectedLabels] = useState<string[]>(() => {
+    // Deduplicate labels on initialization
+    const labels = card.labels || []
+    return Array.from(new Set(labels))
+  })
   const [selectedMembers, setSelectedMembers] = useState<Member[]>(card.members || [])
+  // Helper function to extract time from date
+  const getTimeFromDate = (date: Date | undefined) => {
+    if (!date) return { hour: 12, minute: 0, ampm: 'PM' as const }
+    const hours = date.getHours()
+    const hour12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
+    return {
+      hour: hour12,
+      minute: date.getMinutes(),
+      ampm: (hours >= 12 ? 'PM' : 'AM') as 'AM' | 'PM'
+    }
+  }
+
+  const [startDate, setStartDate] = useState<Date | undefined>(card.startDate ? new Date(card.startDate) : undefined)
   const [dueDate, setDueDate] = useState<Date | undefined>(card.dueDate ? new Date(card.dueDate) : undefined)
+  const [tempStartDate, setTempStartDate] = useState<Date | undefined>(card.startDate ? new Date(card.startDate) : undefined)
+  const [tempDueDate, setTempDueDate] = useState<Date | undefined>(card.dueDate ? new Date(card.dueDate) : undefined)
+  const [enableStartDate, setEnableStartDate] = useState<boolean>(!!card.startDate)
+  
+  // Time picker state for due date
+  const initialDueTime = getTimeFromDate(card.dueDate ? new Date(card.dueDate) : undefined)
+  const [dueHour, setDueHour] = useState<string>(initialDueTime.hour.toString().padStart(2, '0'))
+  const [dueMinute, setDueMinute] = useState<string>(initialDueTime.minute.toString().padStart(2, '0'))
+  const [dueAmPm, setDueAmPm] = useState<'AM' | 'PM'>(initialDueTime.ampm)
   const [checklists, setChecklists] = useState<Checklist[]>([
     {
       id: "1",
@@ -118,16 +171,88 @@ export function CardDetailsModal({ card, isOpen, onClose, lists = [], onUpdateCa
   const [showMembersPopover, setShowMembersPopover] = useState(false)
   const [showLabelsPopover, setShowLabelsPopover] = useState(false)
   const [showDatePopover, setShowDatePopover] = useState(false)
+
+  // Memoize date values to ensure stable dependencies
+  const cardStartDate = useMemo(() => card.startDate ?? undefined, [card.startDate])
+  const cardDueDate = useMemo(() => card.dueDate ?? undefined, [card.dueDate])
+
+  // Helper function to combine date and time
+  const combineDateAndTime = (date: Date | undefined, hour: string, minute: string, ampm: 'AM' | 'PM'): Date | undefined => {
+    if (!date) return undefined
+    const newDate = new Date(date)
+    let hours24 = parseInt(hour)
+    if (ampm === 'PM' && hours24 !== 12) {
+      hours24 += 12
+    } else if (ampm === 'AM' && hours24 === 12) {
+      hours24 = 0
+    }
+    newDate.setHours(hours24, parseInt(minute), 0, 0)
+    return newDate
+  }
+
+  // Sync dates when card changes
+  useEffect(() => {
+    const newStartDate = cardStartDate ? new Date(cardStartDate) : undefined
+    const newDueDate = cardDueDate ? new Date(cardDueDate) : undefined
+    setStartDate(newStartDate)
+    setDueDate(newDueDate)
+    setTempStartDate(newStartDate)
+    setTempDueDate(newDueDate)
+    setEnableStartDate(!!cardStartDate)
+    
+    if (newDueDate) {
+      const time = getTimeFromDate(newDueDate)
+      setDueHour(time.hour.toString().padStart(2, '0'))
+      setDueMinute(time.minute.toString().padStart(2, '0'))
+      setDueAmPm(time.ampm)
+    }
+  }, [cardStartDate, cardDueDate])
+
+  // Sync temp dates when popover opens
+  useEffect(() => {
+    if (showDatePopover) {
+      setTempStartDate(startDate)
+      // Initialize tempDueDate - use dueDate if exists, otherwise create default for time picker
+      if (dueDate) {
+        setTempDueDate(dueDate)
+        const time = getTimeFromDate(dueDate)
+        setDueHour(time.hour.toString().padStart(2, '0'))
+        setDueMinute(time.minute.toString().padStart(2, '0'))
+        setDueAmPm(time.ampm)
+      } else {
+        // Initialize with today's date and default time for time picker
+        const defaultDate = new Date()
+        defaultDate.setHours(12, 0, 0, 0) // Default to 12:00 PM
+        setTempDueDate(defaultDate)
+        setDueHour('12')
+        setDueMinute('00')
+        setDueAmPm('PM')
+      }
+      setEnableStartDate(!!startDate)
+    }
+  }, [showDatePopover, startDate, dueDate])
   const [showChecklistForm, setShowChecklistForm] = useState(false)
   const [newChecklistTitle, setNewChecklistTitle] = useState("")
   const [selectedChecklistToCopy, setSelectedChecklistToCopy] = useState<string>("")
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [currentListId, setCurrentListId] = useState("1")
 
   const [newItemTexts, setNewItemTexts] = useState<{ [key: string]: string }>({})
 
+  // Sync labels when card prop changes
+  useEffect(() => {
+    const labels = card.labels || []
+    setSelectedLabels(Array.from(new Set(labels)))
+  }, [card.labels])
+
   const toggleLabel = (labelName: string) => {
-    setSelectedLabels((prev) => (prev.includes(labelName) ? prev.filter((l) => l !== labelName) : [...prev, labelName]))
+    setSelectedLabels((prev) => {
+      const isSelected = prev.includes(labelName)
+      const newLabels = isSelected 
+        ? prev.filter((l) => l !== labelName) 
+        : [...prev, labelName]
+      // Deduplicate before returning
+      return Array.from(new Set(newLabels))
+    })
   }
 
   const addChecklistItem = (checklistId: string, text: string) => {
@@ -226,26 +351,6 @@ export function CardDetailsModal({ card, isOpen, onClose, lists = [], onUpdateCa
     document.execCommand(command, false, value)
   }
 
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault()
-    const menuHeight = 120
-    const menuWidth = 180
-    const viewportHeight = window.innerHeight
-    const viewportWidth = window.innerWidth
-
-    let x = e.clientX
-    let y = e.clientY
-
-    if (y + menuHeight > viewportHeight) {
-      y = Math.max(10, y - menuHeight)
-    }
-
-    if (x + menuWidth > viewportWidth) {
-      x = Math.max(10, x - menuWidth)
-    }
-
-    setContextMenu({ x, y })
-  }
 
   const totalCompleted = checklists.reduce(
     (sum, checklist) => sum + checklist.items.filter((item) => item.completed).length,
@@ -258,8 +363,9 @@ export function CardDetailsModal({ card, isOpen, onClose, lists = [], onUpdateCa
       onUpdateCard(listId, card.id, {
         title,
         description,
-        labels: selectedLabels,
+        labels: Array.from(new Set(selectedLabels)), // Ensure labels are deduplicated when saving
         members: selectedMembers,
+        startDate: startDate ? startDate.toISOString() : undefined,
         dueDate: dueDate ? dueDate.toISOString() : undefined,
       })
     }
@@ -268,52 +374,11 @@ export function CardDetailsModal({ card, isOpen, onClose, lists = [], onUpdateCa
 
   return (
     <>
-      {contextMenu && (
-        <div
-          className="fixed inset-0 z-[99999]"
-          onClick={() => setContextMenu(null)}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          <div
-            className="absolute bg-popover border rounded-md shadow-lg py-1 min-w-[180px] z-[99999]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-          >
-            <button
-              className="w-full px-3 py-2 text-sm text-left hover:bg-accent flex items-center gap-2"
-              onClick={() => {
-                setContextMenu(null)
-              }}
-            >
-              <ArrowRight className="h-4 w-4" />
-              Move
-            </button>
-            <button
-              className="w-full px-3 py-2 text-sm text-left hover:bg-accent flex items-center gap-2"
-              onClick={() => {
-                setContextMenu(null)
-              }}
-            >
-              <Copy className="h-4 w-4" />
-              Copy
-            </button>
-            <button
-              className="w-full px-3 py-2 text-sm text-left hover:bg-accent flex items-center gap-2 text-destructive"
-              onClick={() => {
-                setContextMenu(null)
-              }}
-            >
-              <Archive className="h-4 w-4" />
-              Archive
-            </button>
-          </div>
-        </div>
-      )}
-
       <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent
           className="w-[90vw] !max-w-[90vw] max-h-[90vh] overflow-hidden p-0 [&>button]:hidden"
-          onContextMenu={handleContextMenu}
         >
+          <DialogTitle className="sr-only">{card.title}</DialogTitle>
           <div className="sticky top-0 z-50 bg-background px-6 py-3 border-b flex items-center justify-end">
             <div className="flex items-center gap-1">
               <DropdownMenu>
@@ -359,7 +424,13 @@ export function CardDetailsModal({ card, isOpen, onClose, lists = [], onUpdateCa
                 <div className="flex flex-wrap gap-2">
                   <MembersManager selectedMembers={selectedMembers} onMembersChange={setSelectedMembers} />
 
-                  <LabelManager selectedLabels={selectedLabels} onLabelsChange={setSelectedLabels} />
+                  <LabelManager 
+                    selectedLabels={selectedLabels} 
+                    onLabelsChange={(labels) => {
+                      // Deduplicate labels when updated from LabelManager
+                      setSelectedLabels(Array.from(new Set(labels)))
+                    }} 
+                  />
 
                   <Popover open={showChecklistForm} onOpenChange={setShowChecklistForm}>
                     <PopoverTrigger asChild>
@@ -417,8 +488,239 @@ export function CardDetailsModal({ card, isOpen, onClose, lists = [], onUpdateCa
                         Dates
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={dueDate} onSelect={setDueDate} initialFocus />
+                    <PopoverContent className="w-80 p-0" align="start" side="top">
+                      <div className="p-4 space-y-4">
+                        <div className="space-y-4">
+                          {/* Start Date Section */}
+                          <div className="space-y-2">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="start-date-checkbox"
+                                checked={enableStartDate}
+                                onCheckedChange={(checked) => {
+                                  setEnableStartDate(checked as boolean)
+                                  if (!checked) {
+                                    setTempStartDate(undefined)
+                                  } else if (!tempStartDate) {
+                                    setTempStartDate(new Date())
+                                  }
+                                }}
+                              />
+                              <label
+                                htmlFor="start-date-checkbox"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                              >
+                                Start date
+                              </label>
+                            </div>
+                            {enableStartDate && (
+                              <div className="pl-6">
+                                <DateInput
+                                  date={tempStartDate}
+                                  onDateChange={(date) => {
+                                    setTempStartDate(date || undefined)
+                                    if (date && tempDueDate && date > tempDueDate) {
+                                      // If start date is after due date, adjust due date
+                                      setTempDueDate(date)
+                                    }
+                                  }}
+                                  placeholder="M/D/Y"
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Due Date Section - Always Visible */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium leading-none block">
+                              Due date
+                            </label>
+                            <div className="space-y-3">
+                              <DateInput
+                                date={tempDueDate}
+                                onDateChange={(date) => {
+                                  if (date) {
+                                    const newDate = new Date(date)
+                                    // Preserve time when changing date
+                                    let hours24 = parseInt(dueHour || '12')
+                                    if (dueAmPm === 'PM' && hours24 !== 12) {
+                                      hours24 += 12
+                                    } else if (dueAmPm === 'AM' && hours24 === 12) {
+                                      hours24 = 0
+                                    }
+                                    newDate.setHours(hours24, parseInt(dueMinute || '0'), 0, 0)
+                                    setTempDueDate(newDate)
+                                  } else {
+                                    setTempDueDate(undefined)
+                                  }
+                                  if (date && tempStartDate && date < tempStartDate) {
+                                    // If due date is before start date, adjust start date
+                                    setTempStartDate(date)
+                                  }
+                                }}
+                                placeholder="M/D/Y"
+                                disabled={(date) => {
+                                  // Disable dates before start date if start date is enabled
+                                  if (enableStartDate && tempStartDate) {
+                                    return date < tempStartDate
+                                  }
+                                  return false
+                                }}
+                              />
+                              
+                              {/* Time Picker */}
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1">
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    max="12"
+                                    value={dueHour}
+                                    onChange={(e) => {
+                                      let val = e.target.value
+                                      if (val) {
+                                        const num = parseInt(val)
+                                        if (num < 1) val = '1'
+                                        if (num > 12) val = '12'
+                                        setDueHour(val.padStart(2, '0'))
+                                        // Update tempDueDate with new time
+                                        if (tempDueDate) {
+                                          const newDate = new Date(tempDueDate)
+                                          let hours24 = parseInt(val)
+                                          if (dueAmPm === 'PM' && hours24 !== 12) {
+                                            hours24 += 12
+                                          } else if (dueAmPm === 'AM' && hours24 === 12) {
+                                            hours24 = 0
+                                          }
+                                          newDate.setHours(hours24, parseInt(dueMinute), 0, 0)
+                                          setTempDueDate(newDate)
+                                        }
+                                      } else {
+                                        setDueHour('')
+                                      }
+                                    }}
+                                    onBlur={(e) => {
+                                      if (!e.target.value) {
+                                        setDueHour('12')
+                                      } else {
+                                        setDueHour(e.target.value.padStart(2, '0'))
+                                      }
+                                    }}
+                                    className="w-12 text-center"
+                                    placeholder="12"
+                                  />
+                                  <span className="text-muted-foreground">:</span>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="59"
+                                    value={dueMinute}
+                                    onChange={(e) => {
+                                      let val = e.target.value
+                                      if (val) {
+                                        const num = parseInt(val)
+                                        if (num < 0) val = '0'
+                                        if (num > 59) val = '59'
+                                        setDueMinute(val.padStart(2, '0'))
+                                        // Update tempDueDate with new time
+                                        if (tempDueDate) {
+                                          const newDate = new Date(tempDueDate)
+                                          let hours24 = parseInt(dueHour || '12')
+                                          if (dueAmPm === 'PM' && hours24 !== 12) {
+                                            hours24 += 12
+                                          } else if (dueAmPm === 'AM' && hours24 === 12) {
+                                            hours24 = 0
+                                          }
+                                          newDate.setHours(hours24, parseInt(val), 0, 0)
+                                          setTempDueDate(newDate)
+                                        }
+                                      } else {
+                                        setDueMinute('')
+                                      }
+                                    }}
+                                    onBlur={(e) => {
+                                      if (!e.target.value) {
+                                        setDueMinute('00')
+                                      } else {
+                                        setDueMinute(e.target.value.padStart(2, '0'))
+                                      }
+                                    }}
+                                    className="w-12 text-center"
+                                    placeholder="00"
+                                  />
+                                </div>
+                                <Select 
+                                  value={dueAmPm} 
+                                  onValueChange={(value: 'AM' | 'PM') => {
+                                    setDueAmPm(value)
+                                    // Update tempDueDate with new AM/PM
+                                    if (tempDueDate) {
+                                      const newDate = new Date(tempDueDate)
+                                      let hours24 = parseInt(dueHour || '12')
+                                      if (value === 'PM' && hours24 !== 12) {
+                                        hours24 += 12
+                                      } else if (value === 'AM' && hours24 === 12) {
+                                        hours24 = 0
+                                      }
+                                      newDate.setHours(hours24, parseInt(dueMinute || '0'), 0, 0)
+                                      setTempDueDate(newDate)
+                                    }
+                                  }}
+                                >
+                                  <SelectTrigger className="w-20">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="AM">AM</SelectItem>
+                                    <SelectItem value="PM">PM</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-2 border-t">
+                          <Button
+                            onClick={() => {
+                              if (enableStartDate && tempStartDate) {
+                                setStartDate(tempStartDate)
+                              } else {
+                                setStartDate(undefined)
+                              }
+                              if (tempDueDate) {
+                                const combinedDate = combineDateAndTime(tempDueDate, dueHour, dueMinute, dueAmPm)
+                                setDueDate(combinedDate || tempDueDate)
+                              } else {
+                                setDueDate(undefined)
+                              }
+                              setShowDatePopover(false)
+                            }}
+                            className="flex-1"
+                            size="sm"
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              setStartDate(undefined)
+                              setDueDate(undefined)
+                              setTempStartDate(undefined)
+                              setTempDueDate(undefined)
+                              setEnableStartDate(false)
+                              setDueHour('12')
+                              setDueMinute('00')
+                              setDueAmPm('PM')
+                              setShowDatePopover(false)
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
                     </PopoverContent>
                   </Popover>
 
@@ -434,70 +736,81 @@ export function CardDetailsModal({ card, isOpen, onClose, lists = [], onUpdateCa
 
               <Separator />
 
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold">Members</h3>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {selectedMembers.map((member) => (
-                    <div key={member.id} className="flex items-center gap-2 bg-accent px-2 py-1 rounded">
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                          {member.avatar}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm">{member.name}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-4 w-4 p-0"
-                        onClick={() => setSelectedMembers(selectedMembers.filter((m) => m.id !== member.id))}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Tag className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold">Labels</h3>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {selectedLabels.map((label) => {
-                    const labelColor = labelColors.find((l) => l.name === label)
-                    return (
-                      <Badge key={label} className={`${labelColor?.color || "bg-gray-500"} text-white gap-2`}>
-                        {label}
-                        <X className="h-3 w-3 cursor-pointer hover:opacity-70" onClick={() => toggleLabel(label)} />
-                      </Badge>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold">Due date</h3>
-                </div>
-                {dueDate ? (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="gap-2">
-                      <Clock className="h-3 w-3" />
-                      {format(dueDate, "MMMM d, yyyy")}
-                    </Badge>
-                    <Button variant="ghost" size="sm" onClick={() => setDueDate(undefined)}>
-                      Remove
-                    </Button>
+              {selectedMembers.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold">Members</h3>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No due date</p>
-                )}
-              </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {selectedMembers.map((member) => (
+                      <div key={member.id} className="flex items-center gap-2 bg-accent px-2 py-1 rounded">
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+                            {member.avatar}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm">{member.name}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-4 w-4 p-0"
+                          onClick={() => setSelectedMembers(selectedMembers.filter((m) => m.id !== member.id))}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedLabels.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Tag className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold">Labels</h3>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from(new Set(selectedLabels)).map((label, index) => {
+                      return (
+                        <LabelBadge
+                          key={`${label}-${index}`}
+                          label={label}
+                          onRemove={() => toggleLabel(label)}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(startDate || dueDate) && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                    <h3 className="text-sm font-semibold">Dates</h3>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {startDate && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="gap-2">
+                          <Clock className="h-3 w-3" />
+                          Start: {format(startDate, "MMMM d, yyyy")}
+                        </Badge>
+                      </div>
+                    )}
+                    {dueDate && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="gap-2">
+                          <Clock className="h-3 w-3" />
+                          Due: {format(dueDate, "MMMM d, yyyy")}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <Separator />
 
@@ -616,7 +929,7 @@ export function CardDetailsModal({ card, isOpen, onClose, lists = [], onUpdateCa
                 <AttachmentsManager attachments={attachments} onAttachmentsChange={setAttachments} />
               </div>
 
-              {checklists.map((checklist) => {
+              {checklists.length > 0 && checklists.map((checklist) => {
                 const completedCount = checklist.items.filter((item) => item.completed).length
                 const totalCount = checklist.items.length
                 const newItemText = newItemTexts[checklist.id] || ""
@@ -685,14 +998,18 @@ export function CardDetailsModal({ card, isOpen, onClose, lists = [], onUpdateCa
             </div>
 
             <div className="w-1/2 border-l overflow-y-auto px-4 py-4 space-y-6 bg-muted/20">
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold">Comments</h3>
-                </div>
-                <CommentsManager comments={comments} onCommentsChange={setComments} />
-              </div>
-              <Separator />
+              {comments.length > 0 && (
+                <>
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold">Comments</h3>
+                    </div>
+                    <CommentsManager comments={comments} onCommentsChange={setComments} />
+                  </div>
+                  <Separator />
+                </>
+              )}
               <ActivityFeed />
             </div>
           </div>

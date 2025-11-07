@@ -47,7 +47,8 @@ export function CommentsManager({
         text: newComment,
         timestamp: new Date(),
       }
-      onCommentsChange([...comments, comment])
+      // Add new comment at the beginning so it appears at the top
+      onCommentsChange([comment, ...comments])
       setNewComment("")
       setIsEditingNew(false)
     }
@@ -185,8 +186,10 @@ export function CommentsManager({
         </div>
       </div>
 
-      {/* Comments thread */}
-      {comments.map((comment) => (
+      {/* Comments thread - sorted by newest first */}
+      {[...comments]
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        .map((comment) => (
         <div key={comment.id} className="flex gap-2">
           <Avatar className="h-7 w-7 flex-shrink-0">
             <AvatarFallback className="text-xs bg-primary text-primary-foreground">{comment.avatar}</AvatarFallback>
