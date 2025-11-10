@@ -16,18 +16,18 @@ interface BoardBackgroundSelectorProps {
 }
 
 const colorSwatches = [
-  { name: "Blue", value: "bg-gradient-to-br from-blue-500 to-blue-700", color: "#3b82f6" },
-  { name: "Green", value: "bg-gradient-to-br from-green-500 to-green-700", color: "#22c55e" },
-  { name: "Purple", value: "bg-gradient-to-br from-purple-500 to-purple-700", color: "#a855f7" },
-  { name: "Pink", value: "bg-gradient-to-br from-pink-500 to-pink-700", color: "#ec4899" },
-  { name: "Orange", value: "bg-gradient-to-br from-orange-500 to-orange-700", color: "#f97316" },
-  { name: "Red", value: "bg-gradient-to-br from-red-500 to-red-700", color: "#ef4444" },
-  { name: "Teal", value: "bg-gradient-to-br from-teal-500 to-teal-700", color: "#14b8a6" },
-  { name: "Indigo", value: "bg-gradient-to-br from-indigo-500 to-indigo-700", color: "#6366f1" },
-  { name: "Yellow", value: "bg-gradient-to-br from-yellow-500 to-yellow-700", color: "#eab308" },
-  { name: "Cyan", value: "bg-gradient-to-br from-cyan-500 to-cyan-700", color: "#06b6d4" },
-  { name: "Slate", value: "bg-gradient-to-br from-slate-500 to-slate-700", color: "#64748b" },
-  { name: "Gray", value: "bg-gradient-to-br from-gray-500 to-gray-700", color: "#6b7280" },
+  { name: "Blue", value: "bg-gradient-to-br from-blue-500 to-blue-300", color: "#3b82f6" },
+  { name: "Green", value: "bg-gradient-to-br from-green-500 to-green-300", color: "#22c55e" },
+  { name: "Purple", value: "bg-gradient-to-br from-purple-500 to-purple-300", color: "#a855f7" },
+  { name: "Pink", value: "bg-gradient-to-br from-pink-500 to-pink-300", color: "#ec4899" },
+  { name: "Orange", value: "bg-gradient-to-br from-orange-500 to-orange-300", color: "#f97316" },
+  { name: "Red", value: "bg-gradient-to-br from-red-500 to-red-300", color: "#ef4444" },
+  { name: "Teal", value: "bg-gradient-to-br from-teal-500 to-teal-300", color: "#14b8a6" },
+  { name: "Indigo", value: "bg-gradient-to-br from-indigo-500 to-indigo-300", color: "#6366f1" },
+  { name: "Yellow", value: "bg-gradient-to-br from-yellow-500 to-yellow-300", color: "#eab308" },
+  { name: "Cyan", value: "bg-gradient-to-br from-cyan-500 to-cyan-300", color: "#06b6d4" },
+  { name: "Slate", value: "bg-gradient-to-br from-slate-500 to-slate-300", color: "#64748b" },
+  { name: "Gray", value: "bg-gradient-to-br from-gray-500 to-gray-300", color: "#6b7280" },
 ]
 
 const solidColors = [

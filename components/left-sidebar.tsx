@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useMemo } from "react"
 import { Plus, User, Tag, Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -11,9 +11,14 @@ import { CreateBoardModal } from "@/components/create-board-modal"
 import { EditBoardModal } from "@/components/edit-board-modal"
 import { useBoardStore, type Board } from "@/store/boards-store"
 import { getBoardIcon } from "@/lib/board-icons"
+import { getSidebarSurfaceStyle } from "@/lib/board-backgrounds"
 import { useRouter } from "next/navigation"
 
-export function LeftSidebar() {
+interface LeftSidebarProps {
+  boardBackground: string
+}
+
+export function LeftSidebar({ boardBackground }: LeftSidebarProps) {
   const [selectedMembers, setSelectedMembers] = useState<Member[]>([])
   const [selectedLabels, setSelectedLabels] = useState<string[]>([])
   const { getActiveBoards, addBoard, updateBoard } = useBoardStore()
@@ -23,9 +28,13 @@ export function LeftSidebar() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const router = useRouter()
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const sidebarSurface = useMemo(() => getSidebarSurfaceStyle(boardBackground), [boardBackground])
 
   return (
-    <aside className="w-64 bg-gradient-to-br from-blue-600/30 to-blue-800/40 backdrop-blur-sm border-r border-white/10 flex-shrink-0">
+    <aside
+      className="w-64 flex-shrink-0 border-r backdrop-blur-xl transition-colors duration-500"
+      style={sidebarSurface}
+    >
       <ScrollArea className="h-full">
         <div className="p-4 space-y-6">
           {/* Header */}

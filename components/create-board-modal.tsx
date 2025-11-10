@@ -16,14 +16,14 @@ interface CreateBoardModalProps {
 }
 
 const backgroundOptions = [
-  { id: "1", class: "bg-gradient-to-br from-blue-500 to-blue-700", name: "Ocean Blue" },
-  { id: "2", class: "bg-gradient-to-br from-purple-500 to-purple-700", name: "Purple Dream" },
-  { id: "3", class: "bg-gradient-to-br from-green-500 to-green-700", name: "Forest Green" },
-  { id: "4", class: "bg-gradient-to-br from-orange-500 to-orange-700", name: "Sunset Orange" },
-  { id: "5", class: "bg-gradient-to-br from-pink-500 to-pink-700", name: "Pink Blossom" },
-  { id: "6", class: "bg-gradient-to-br from-teal-500 to-teal-700", name: "Teal Wave" },
-  { id: "7", class: "bg-gradient-to-br from-red-500 to-red-700", name: "Ruby Red" },
-  { id: "8", class: "bg-gradient-to-br from-indigo-500 to-indigo-700", name: "Indigo Night" },
+  { id: "1", class: "bg-gradient-to-br from-blue-500 to-blue-300", name: "Ocean Blue" },
+  { id: "2", class: "bg-gradient-to-br from-purple-500 to-purple-300", name: "Purple Dream" },
+  { id: "3", class: "bg-gradient-to-br from-green-500 to-green-300", name: "Forest Green" },
+  { id: "4", class: "bg-gradient-to-br from-orange-500 to-orange-300", name: "Sunset Orange" },
+  { id: "5", class: "bg-gradient-to-br from-pink-500 to-pink-300", name: "Pink Blossom" },
+  { id: "6", class: "bg-gradient-to-br from-teal-500 to-teal-300", name: "Teal Wave" },
+  { id: "7", class: "bg-gradient-to-br from-red-500 to-red-300", name: "Ruby Red" },
+  { id: "8", class: "bg-gradient-to-br from-indigo-500 to-indigo-300", name: "Indigo Night" },
 ]
 
 export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBoardModalProps) {

@@ -110,7 +110,7 @@ export default function BoardPage() {
             availableMembers={availableMembers}
           />
           <div className="flex-1 flex overflow-hidden">
-            <LeftSidebar />
+            <LeftSidebar boardBackground={boardBackground} />
             <main className="flex-1 overflow-hidden">
               <KanbanBoard
                 boardId={boardId}
