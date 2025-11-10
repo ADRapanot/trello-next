@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useBoardStore, type Board } from "@/store/boards-store"
 import { ArchivedBoardsView } from "@/components/archived-boards-view"
+import { getBoardIcon } from "@/lib/board-icons"
 
 export function BoardsGrid() {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -81,6 +82,8 @@ interface BoardCardProps {
 }
 
 function BoardCard({ board, onToggleFavorite }: BoardCardProps) {
+  const IconComponent = getBoardIcon(board.icon)
+
   return (
     <Link href={`/board/${board.id}`}>
       <Card
@@ -91,7 +94,7 @@ function BoardCard({ board, onToggleFavorite }: BoardCardProps) {
       >
         <div className="absolute inset-0 p-3 flex flex-col justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-xl">{board.icon}</span>
+            <IconComponent className="h-5 w-5 text-white" />
             <h3 className="text-white font-semibold text-base leading-tight">{board.title}</h3>
           </div>
           <Button

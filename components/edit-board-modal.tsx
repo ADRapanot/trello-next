@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import type { Board } from "@/store/boards-store"
+import { boardIconOptions, defaultBoardIconId } from "@/lib/board-icons"
 
 interface EditBoardModalProps {
   board: Board | null
@@ -27,33 +28,19 @@ const backgroundOptions = [
   { id: "8", class: "bg-gradient-to-br from-indigo-500 to-indigo-700", name: "Indigo Night" },
 ]
 
-const avatarOptions = [
-  { id: "rocket", icon: "🚀", name: "Rocket" },
-  { id: "star", icon: "⭐", name: "Star" },
-  { id: "fire", icon: "🔥", name: "Fire" },
-  { id: "heart", icon: "❤️", name: "Heart" },
-  { id: "lightbulb", icon: "💡", name: "Lightbulb" },
-  { id: "target", icon: "🎯", name: "Target" },
-  { id: "chart", icon: "📊", name: "Chart" },
-  { id: "sparkles", icon: "✨", name: "Sparkles" },
-  { id: "palette", icon: "🎨", name: "Palette" },
-  { id: "megaphone", icon: "📣", name: "Megaphone" },
-  { id: "trophy", icon: "🏆", name: "Trophy" },
-  { id: "books", icon: "📚", name: "Books" },
-]
-
 export function EditBoardModal({ board, open, onOpenChange, onSave }: EditBoardModalProps) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [selectedBackground, setSelectedBackground] = useState(backgroundOptions[0].class)
-  const [selectedAvatar, setSelectedAvatar] = useState(avatarOptions[0].icon)
+  const [selectedIcon, setSelectedIcon] = useState(defaultBoardIconId)
 
   useEffect(() => {
     if (board) {
       setTitle(board.title)
       setDescription(board.description || "")
       setSelectedBackground(board.background)
-      setSelectedAvatar(board.icon)
+      const hasIcon = boardIconOptions.some((option) => option.id === board.icon)
+      setSelectedIcon(hasIcon ? board.icon : defaultBoardIconId)
     }
   }, [board])
 
@@ -62,7 +49,7 @@ export function EditBoardModal({ board, open, onOpenChange, onSave }: EditBoardM
       onSave(board.id, {
         title,
         background: selectedBackground,
-        icon: selectedAvatar,
+        icon: selectedIcon,
         description: description.trim() || undefined,
       })
       onOpenChange(false)
@@ -123,20 +110,18 @@ export function EditBoardModal({ board, open, onOpenChange, onSave }: EditBoardM
           <div className="space-y-2">
             <Label>Board Avatar</Label>
             <div className="grid grid-cols-6 gap-2">
-              {avatarOptions.map((avatar) => (
+              {boardIconOptions.map((option) => (
                 <button
-                  key={avatar.id}
+                  key={option.id}
                   type="button"
                   className={cn(
-                    "h-12 rounded-lg border border-transparent bg-white/10 text-2xl flex items-center justify-center transition-colors",
-                    selectedAvatar === avatar.icon
-                      ? "border-primary bg-primary/10"
-                      : "hover:bg-white/20",
+                    "h-12 rounded-lg border border-transparent bg-white/10 flex items-center justify-center transition-all",
+                    selectedIcon === option.id ? "border-primary bg-primary/10 shadow-sm" : "hover:bg-white/20",
                   )}
-                  onClick={() => setSelectedAvatar(avatar.icon)}
-                  title={avatar.name}
+                  onClick={() => setSelectedIcon(option.id)}
+                  title={option.name}
                 >
-                  <span>{avatar.icon}</span>
+                  <option.Icon className="h-6 w-6 text-[#2196F3]" />
                 </button>
               ))}
             </div>

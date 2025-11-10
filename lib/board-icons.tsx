@@ -7,7 +7,6 @@ import {
   Flag,
   KanbanSquare,
   Lightbulb,
-  LucideIcon,
   Megaphone,
   MessageSquare,
   Palette,
@@ -16,6 +15,7 @@ import {
   Target,
   Users,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 
 export interface BoardIconOption {
   id: string
@@ -45,6 +45,8 @@ const boardIconLookup = boardIconOptions.reduce<Record<string, LucideIcon>>((acc
   acc[option.id] = option.Icon
   return acc
 }, {})
+
+export const defaultBoardIconId = boardIconOptions[0]?.id ?? "kanban"
 
 export function getBoardIcon(iconId?: string): LucideIcon {
   return boardIconLookup[iconId ?? ""] ?? KanbanSquare

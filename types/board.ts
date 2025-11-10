@@ -2,7 +2,7 @@ export interface Board {
   id: string
   title: string
   background: string
-  icon: string
+  icon: string // id referencing boardIconOptions
   isFavorite: boolean
 }
 

@@ -10,6 +10,7 @@ import { ShareBoardModal } from "@/components/share-board-modal"
 import { CreateBoardModal } from "@/components/create-board-modal"
 import { EditBoardModal } from "@/components/edit-board-modal"
 import { useBoardStore, type Board } from "@/store/boards-store"
+import { getBoardIcon } from "@/lib/board-icons"
 import { useRouter } from "next/navigation"
 
 export function LeftSidebar() {
@@ -38,7 +39,9 @@ export function LeftSidebar() {
               Boards
             </h3>
             <div className="space-y-1">
-              {activeBoards.map((board) => (
+              {activeBoards.map((board) => {
+                const IconComponent = getBoardIcon(board.icon)
+                return (
                 <div
                   key={board.id}
                   onDoubleClick={(e) => {
@@ -68,12 +71,12 @@ export function LeftSidebar() {
                     asChild
                   >
                     <div>
-                      <span className="text-base">{board.icon}</span>
+                      <IconComponent className="h-4 w-4" />
                       <span className="text-sm">{board.title}</span>
                     </div>
                   </Button>
                 </div>
-              ))}
+              )})}
             </div>
             <Button
               variant="ghost"
