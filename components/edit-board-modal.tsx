@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import type { Board } from "@/store/boards-store"
 import { boardIconOptions, defaultBoardIconId } from "@/lib/board-icons"
+import { useColorStore, defaultGradientBackgroundValue } from "@/store/color-store"
 
 interface EditBoardModalProps {
   board: Board | null
@@ -17,21 +18,13 @@ interface EditBoardModalProps {
   onSave: (boardId: string, updates: { title: string; background: string; icon: string; description?: string }) => void
 }
 
-const backgroundOptions = [
-  { id: "1", class: "bg-gradient-to-br from-blue-500 to-blue-300", name: "Ocean Blue" },
-  { id: "2", class: "bg-gradient-to-br from-purple-500 to-purple-300", name: "Purple Dream" },
-  { id: "3", class: "bg-gradient-to-br from-green-500 to-green-300", name: "Forest Green" },
-  { id: "4", class: "bg-gradient-to-br from-orange-500 to-orange-300", name: "Sunset Orange" },
-  { id: "5", class: "bg-gradient-to-br from-pink-500 to-pink-300", name: "Pink Blush" },
-  { id: "6", class: "bg-gradient-to-br from-teal-500 to-teal-300", name: "Teal Waters" },
-  { id: "7", class: "bg-gradient-to-br from-red-500 to-red-300", name: "Ruby Red" },
-  { id: "8", class: "bg-gradient-to-br from-indigo-500 to-indigo-300", name: "Indigo Night" },
-]
-
 export function EditBoardModal({ board, open, onOpenChange, onSave }: EditBoardModalProps) {
+  const { gradientBackgrounds } = useColorStore()
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [selectedBackground, setSelectedBackground] = useState(backgroundOptions[0].class)
+  const [selectedBackground, setSelectedBackground] = useState(
+    gradientBackgrounds[0]?.value ?? defaultGradientBackgroundValue,
+  )
   const [selectedIcon, setSelectedIcon] = useState(defaultBoardIconId)
 
   useEffect(() => {
@@ -91,16 +84,16 @@ export function EditBoardModal({ board, open, onOpenChange, onSave }: EditBoardM
           <div className="space-y-2">
             <Label>Background</Label>
             <div className="grid grid-cols-4 gap-2">
-              {backgroundOptions.map((bg) => (
+              {gradientBackgrounds.map((bg) => (
                 <button
                   key={bg.id}
                   type="button"
                   className={cn(
                     "h-16 rounded-lg transition-all",
-                    bg.class,
-                    selectedBackground === bg.class ? "ring-2 ring-primary ring-offset-2" : "hover:opacity-80",
+                    bg.value,
+                    selectedBackground === bg.value ? "ring-2 ring-primary ring-offset-2" : "hover:opacity-80",
                   )}
-                  onClick={() => setSelectedBackground(bg.class)}
+                  onClick={() => setSelectedBackground(bg.value)}
                   title={bg.name}
                 />
               ))}
@@ -121,7 +114,7 @@ export function EditBoardModal({ board, open, onOpenChange, onSave }: EditBoardM
                   onClick={() => setSelectedIcon(option.id)}
                   title={option.name}
                 >
-                  <option.Icon className="h-6 w-6" color="#2196F3" />
+                  <option.Icon className="h-6 w-6 !text-[#2196F3]" />
                 </button>
               ))}
             </div>

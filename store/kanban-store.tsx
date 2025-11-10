@@ -120,7 +120,6 @@ const defaultBoardState: BoardKanbanState = {
             { id: "2", name: "Jane Smith", avatar: "JS" },
           ],
           dueDate: "2025-01-15",
-          checklist: { completed: 2, total: 5 },
           comments: [
             {
               id: "comment-1",
@@ -165,7 +164,6 @@ const defaultBoardState: BoardKanbanState = {
             { id: "4", name: "Bob Wilson", avatar: "BW" },
           ],
           dueDate: "2025-01-10",
-          checklist: { completed: 3, total: 4 },
           attachments: [],
           comments: [],
           checklists: [],

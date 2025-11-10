@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { boardIconOptions, defaultBoardIconId } from "@/lib/board-icons"
+import { useColorStore, defaultGradientBackgroundValue } from "@/store/color-store"
 
 interface CreateBoardModalProps {
   open: boolean
@@ -15,21 +16,13 @@ interface CreateBoardModalProps {
   onCreateBoard: (title: string, background: string, icon: string, description?: string) => void
 }
 
-const backgroundOptions = [
-  { id: "1", class: "bg-gradient-to-br from-blue-500 to-blue-300", name: "Ocean Blue" },
-  { id: "2", class: "bg-gradient-to-br from-purple-500 to-purple-300", name: "Purple Dream" },
-  { id: "3", class: "bg-gradient-to-br from-green-500 to-green-300", name: "Forest Green" },
-  { id: "4", class: "bg-gradient-to-br from-orange-500 to-orange-300", name: "Sunset Orange" },
-  { id: "5", class: "bg-gradient-to-br from-pink-500 to-pink-300", name: "Pink Blossom" },
-  { id: "6", class: "bg-gradient-to-br from-teal-500 to-teal-300", name: "Teal Wave" },
-  { id: "7", class: "bg-gradient-to-br from-red-500 to-red-300", name: "Ruby Red" },
-  { id: "8", class: "bg-gradient-to-br from-indigo-500 to-indigo-300", name: "Indigo Night" },
-]
-
 export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBoardModalProps) {
+  const { gradientBackgrounds } = useColorStore()
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [selectedBackground, setSelectedBackground] = useState(backgroundOptions[0].class)
+  const [selectedBackground, setSelectedBackground] = useState(
+    gradientBackgrounds[0]?.value ?? defaultGradientBackgroundValue,
+  )
   const [selectedIcon, setSelectedIcon] = useState(defaultBoardIconId)
 
   const handleCreate = () => {
@@ -38,7 +31,8 @@ export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBo
       onCreateBoard(title, selectedBackground, iconToUse, description.trim() || undefined)
       setTitle("")
       setDescription("")
-      setSelectedBackground(backgroundOptions[0].class)
+      const resetBackground = gradientBackgrounds[0]?.value ?? defaultGradientBackgroundValue
+      setSelectedBackground(resetBackground)
       setSelectedIcon(defaultBoardIconId)
       onOpenChange(false)
     }
@@ -77,15 +71,15 @@ export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBo
           <div className="space-y-2">
             <Label>Background</Label>
             <div className="grid grid-cols-4 gap-2">
-              {backgroundOptions.map((bg) => (
+              {gradientBackgrounds.map((bg) => (
                 <button
                   key={bg.id}
                   className={cn(
                     "h-16 rounded-lg transition-all",
-                    bg.class,
-                    selectedBackground === bg.class ? "ring-2 ring-primary ring-offset-2" : "hover:opacity-80",
+                    bg.value,
+                    selectedBackground === bg.value ? "ring-2 ring-primary ring-offset-2" : "hover:opacity-80",
                   )}
-                  onClick={() => setSelectedBackground(bg.class)}
+                  onClick={() => setSelectedBackground(bg.value)}
                   title={bg.name}
                 />
               ))}
@@ -106,7 +100,7 @@ export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBo
                   title={option.name}
                   type="button"
                 >
-                  <option.Icon className="h-6 w-6 text-white" />
+                  <option.Icon className="h-6 w-6 !text-[#2196F3]" />
                 </button>
               ))}
             </div>

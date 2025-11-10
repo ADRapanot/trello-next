@@ -148,7 +148,7 @@ export function RuleEditorDialog({ rule, isOpen, onClose, onSave, boardId = "1" 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl h-[80vh] p-0 gap-0">
+      <DialogContent className="max-w-3xl p-0 gap-0">
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>Edit Automation Rule</DialogTitle>
         </DialogHeader>

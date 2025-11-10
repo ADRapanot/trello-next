@@ -77,7 +77,13 @@ interface CardDetailsModalProps {
   listId?: string
   boardId?: string
   onArchiveCard?: (cardId: string, listId: string) => void
-  onMoveCard?: (cardId: string, fromListId: string, toListId: string, toIndex: number) => void
+  onMoveCard?: (
+    cardId: string,
+    fromListId: string,
+    toListId: string,
+    toIndex: number,
+    originalListId?: string,
+  ) => void
   onDeleteCard?: (cardId: string, listId: string) => void
 }
 
@@ -180,12 +186,14 @@ export function CardDetailsModal({
     (updater: (prev: Checklist[]) => Checklist[]) => {
       setChecklists((prev) => {
         const updated = updater(prev)
-        commitUpdate({ checklists: updated, checklist: computeChecklistSummary(updated) })
+        if (updated === prev) return prev
         return updated
       })
     },
-    [commitUpdate],
+    [],
   )
+
+  const lastCommittedChecklistsRef = useRef<string>(JSON.stringify(card.checklists || []))
 
   useEffect(() => {
     setSelectedMembers(card.members || [])
@@ -205,7 +213,17 @@ export function CardDetailsModal({
 
   useEffect(() => {
     setChecklists(card.checklists || [])
+    lastCommittedChecklistsRef.current = JSON.stringify(card.checklists || [])
   }, [card.checklists])
+
+  useEffect(() => {
+    const serialized = JSON.stringify(checklists)
+    if (serialized === lastCommittedChecklistsRef.current) {
+      return
+    }
+    lastCommittedChecklistsRef.current = serialized
+    commitUpdate({ checklists, checklist: computeChecklistSummary(checklists) })
+  }, [checklists, commitUpdate])
 
   useEffect(() => {
     setIsComplete(card.isComplete || false)

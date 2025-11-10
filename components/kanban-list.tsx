@@ -23,7 +23,14 @@ import type { List } from "@/store/types"
 interface KanbanListProps {
   list: List
   boardId: string
-  onMoveCard: (cardId: string, fromListId: string, toListId: string, toIndex: number, shouldTriggerAutomation?: boolean) => void
+  onMoveCard: (
+    cardId: string,
+    fromListId: string,
+    toListId: string,
+    toIndex: number,
+    shouldTriggerAutomation?: boolean,
+    originalListId?: string,
+  ) => void
   onAddCard: (listId: string, title: string) => void
   onArchiveList: (listId: string) => void
   onArchiveCard?: (cardId: string, listId: string) => void
@@ -70,7 +77,15 @@ export function KanbanList({
 
   const [{ isOver: isOverCard, canDrop: canDropCard }, dropCard] = useDrop({
     accept: "CARD",
-    drop: (item: { id: string; listId: string; originalListId?: string }, monitor) => {
+    hover: (item: { id: string; listId: string; index: number; originalListId?: string; originalIndex?: number; dropHandled?: boolean }) => {
+      if (!item.originalListId) {
+        item.originalListId = item.listId
+        item.originalIndex = item.index
+      }
+      item.listId = list.id
+      item.index = list.cards.length
+    },
+    drop: (item: { id: string; listId: string; index: number; originalListId?: string; originalIndex?: number; dropHandled?: boolean }, monitor) => {
       console.log('🎯 KanbanList DROP called:', {
         cardId: item.id,
         didDrop: monitor.didDrop(),
@@ -89,9 +104,11 @@ export function KanbanList({
           fromListId,
           toListId: list.id,
           listLength: list.cards.length,
+          targetIndex: item.index,
           shouldTriggerAutomation: true
         })
-        onMoveCard(item.id, fromListId, list.id, list.cards.length, true)
+        item.dropHandled = true
+        onMoveCard(item.id, fromListId, list.id, item.index ?? list.cards.length, true, item.originalListId)
       } else {
         console.log('⚠️ KanbanList DROP - Skipped (already handled by card)')
       }
