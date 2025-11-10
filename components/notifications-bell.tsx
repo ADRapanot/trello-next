@@ -1,94 +1,64 @@
 "use client"
 
 import { useState } from "react"
+import { formatDistanceToNow } from "date-fns"
 import { Bell, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useKanbanStore } from "@/store/kanban-store"
+import type { ActivityNotification, ActivityNotificationType } from "@/store/types"
 
-interface Notification {
-  id: string
-  type: "mention" | "dueDate" | "assignment" | "comment"
-  title: string
-  description: string
-  avatar: string
-  timestamp: string
-  read: boolean
+interface NotificationsBellProps {
+  boardId?: string
 }
 
-const mockNotifications: Notification[] = [
-  {
-    id: "1",
-    type: "mention",
-    title: "Mentioned you in Product Roadmap",
-    description: "@John: Can you review the new design mockups?",
-    avatar: "AJ",
-    timestamp: "5 minutes ago",
-    read: false,
-  },
-  {
-    id: "2",
-    type: "dueDate",
-    title: "Card due today",
-    description: '"Research user feedback" is due today',
-    avatar: "RD",
-    timestamp: "2 hours ago",
-    read: false,
-  },
-  {
-    id: "3",
-    type: "assignment",
-    title: "Assigned to you",
-    description: '"Implement authentication" in Product Roadmap',
-    avatar: "JS",
-    timestamp: "1 day ago",
-    read: true,
-  },
-  {
-    id: "4",
-    type: "mention",
-    title: "Mentioned you in Marketing Campaign",
-    description: "@Alice: Please check the Q1 strategy",
-    avatar: "JD",
-    timestamp: "2 days ago",
-    read: true,
-  },
-  {
-    id: "5",
-    type: "comment",
-    title: "New comment on your card",
-    description: '"Design new landing page" has a new comment',
-    avatar: "SD",
-    timestamp: "3 days ago",
-    read: true,
-  },
-]
-
-const typeStyles = {
-  mention: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  dueDate: "bg-red-500/10 text-red-700 dark:text-red-400",
-  assignment: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
+const typeStyles: Record<ActivityNotificationType, string> = {
+  card: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  list: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
+  label: "bg-teal-500/10 text-teal-700 dark:text-teal-400",
+  member: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  attachment: "bg-purple-500/10 text-purple-700 dark:text-purple-400",
+  checklist: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   comment: "bg-green-500/10 text-green-700 dark:text-green-400",
+  date: "bg-red-500/10 text-red-700 dark:text-red-400",
+  automation: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+  other: "bg-slate-500/10 text-slate-700 dark:text-slate-300",
 }
 
-export function NotificationsBell() {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications)
+const formatTimestamp = (timestamp: ActivityNotification["timestamp"]) => {
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return "just now"
+  return formatDistanceToNow(date, { addSuffix: true })
+}
+
+export function NotificationsBell({ boardId }: NotificationsBellProps) {
   const [open, setOpen] = useState(false)
+  const {
+    getNotifications,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    removeNotification,
+  } = useKanbanStore()
+  const notifications = boardId ? getNotifications(boardId) : []
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
   const handleMarkAsRead = (id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+    if (!boardId) return
+    markNotificationAsRead(boardId, id)
   }
 
   const handleMarkAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    if (!boardId) return
+    markAllNotificationsAsRead(boardId)
   }
 
   const handleDeleteNotification = (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id))
+    if (!boardId) return
+    removeNotification(boardId, id)
   }
 
   return (
@@ -110,7 +80,13 @@ export function NotificationsBell() {
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="font-semibold text-lg">Notifications</h2>
           {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={handleMarkAllAsRead} className="text-xs">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleMarkAllAsRead}
+              className="text-xs"
+              disabled={!boardId}
+            >
               Mark all as read
             </Button>
           )}
@@ -141,14 +117,23 @@ export function NotificationsBell() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
-                          <p className="font-medium text-sm leading-tight">{notification.title}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm leading-tight">{notification.title}</p>
+                            <Badge
+                              className={`text-[10px] font-semibold capitalize ${typeStyles[notification.type]}`}
+                            >
+                              {notification.type}
+                            </Badge>
+                          </div>
                           <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{notification.description}</p>
                         </div>
                         {!notification.read && <div className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0 mt-1" />}
                       </div>
 
                       <div className="flex items-center justify-between mt-2 gap-2">
-                        <span className="text-xs text-muted-foreground">{notification.timestamp}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatTimestamp(notification.timestamp)}
+                        </span>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           {!notification.read && (
                             <Button
@@ -156,6 +141,7 @@ export function NotificationsBell() {
                               size="sm"
                               onClick={() => handleMarkAsRead(notification.id)}
                               className="h-6 px-2 text-xs"
+                              disabled={!boardId}
                             >
                               <Check className="h-3 w-3" />
                             </Button>
@@ -165,6 +151,7 @@ export function NotificationsBell() {
                             size="sm"
                             onClick={() => handleDeleteNotification(notification.id)}
                             className="h-6 px-2 text-xs text-destructive hover:text-destructive"
+                            disabled={!boardId}
                           >
                             <X className="h-3 w-3" />
                           </Button>

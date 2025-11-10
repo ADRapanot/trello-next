@@ -34,6 +34,8 @@ export interface Comment {
   avatar: string
   text: string
   timestamp: Date
+  parentId?: string
+  replies?: Comment[]
 }
 
 export type ActivityType =
@@ -104,6 +106,29 @@ export interface Activity {
     to?: string
     itemName?: string
   }
+}
+
+export type ActivityNotificationType =
+  | "card"
+  | "list"
+  | "label"
+  | "member"
+  | "attachment"
+  | "checklist"
+  | "comment"
+  | "date"
+  | "automation"
+  | "other"
+
+export interface ActivityNotification {
+  id: string
+  activityId: string
+  type: ActivityNotificationType
+  title: string
+  description: string
+  avatar: string
+  timestamp: Date
+  read: boolean
 }
 
 export interface Card {

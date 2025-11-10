@@ -65,7 +65,7 @@ export function BoardNavbar({
         </div>
 
         <div className="flex items-center gap-2">
-          <NotificationsBell />
+          <NotificationsBell boardId={boardId} />
           {onFiltersChange && (
             <BoardFiltersPopover
               onFiltersChange={onFiltersChange}

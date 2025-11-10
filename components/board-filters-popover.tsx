@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useLabelColor } from "@/components/label-manager"
 
 interface FilterState {
   labels: string[]
@@ -19,6 +21,71 @@ interface BoardFiltersPopoverProps {
   onFiltersChange: (filters: FilterState) => void
   availableLabels: string[]
   availableMembers: Array<{ id: string; name: string; avatar: string }>
+}
+
+const createOptionId = (prefix: string, value: string) =>
+  `${prefix}-${value.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`
+
+function LabelFilterOption({
+  label,
+  checked,
+  onToggle,
+}: {
+  label: string
+  checked: boolean
+  onToggle: () => void
+}) {
+  const colorClass = useLabelColor(label)
+  const optionId = useMemo(() => createOptionId("label", label), [label])
+
+  return (
+    <div className="flex items-center gap-2">
+      <Checkbox id={optionId} checked={checked} onCheckedChange={onToggle} />
+      <Label
+        htmlFor={optionId}
+        className="flex items-center gap-2 text-sm font-normal cursor-pointer select-none"
+      >
+        <span className={`h-3 w-3 rounded-full border border-border ${colorClass}`} aria-hidden="true" />
+        {label}
+      </Label>
+    </div>
+  )
+}
+
+function MemberFilterOption({
+  member,
+  checked,
+  onToggle,
+}: {
+  member: { id: string; name: string; avatar: string }
+  checked: boolean
+  onToggle: () => void
+}) {
+  const optionId = useMemo(() => createOptionId("member", member.id), [member.id])
+  const initials = useMemo(() => {
+    const matches = member.name
+      .split(" ")
+      .filter(Boolean)
+      .map((part) => part[0]?.toUpperCase())
+      .join("")
+    return matches.slice(0, 2) || "?"
+  }, [member.name])
+
+  return (
+    <div className="flex items-center gap-2">
+      <Checkbox id={optionId} checked={checked} onCheckedChange={onToggle} />
+      <Label
+        htmlFor={optionId}
+        className="flex items-center gap-2 text-sm font-normal cursor-pointer select-none"
+      >
+        <Avatar className="h-6 w-6">
+          <AvatarImage src={member.avatar} alt={member.name} />
+          <AvatarFallback>{initials}</AvatarFallback>
+        </Avatar>
+        <span>{member.name}</span>
+      </Label>
+    </div>
+  )
 }
 
 export function BoardFiltersPopover({ onFiltersChange, availableLabels, availableMembers }: BoardFiltersPopoverProps) {
@@ -78,15 +145,15 @@ export function BoardFiltersPopover({ onFiltersChange, availableLabels, availabl
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 bg-transparent  hover:bg-white/30 border-0 text-white">
+        <Button variant="ghost" size="icon" className="relative text-white hover:bg-white/20">
           <Filter className="h-4 w-4" />
-          Filters
+          <span className="sr-only">Filter cards</span>
           {activeFilterCount > 0 && (
             <Badge
-              variant="secondary"
-              className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs  bg-red-500 text-white"
+              variant="default"
+              className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500 text-white text-xs"
             >
-              {activeFilterCount}
+              {activeFilterCount > 9 ? "9+" : activeFilterCount}
             </Badge>
           )}
         </Button>
@@ -109,16 +176,12 @@ export function BoardFiltersPopover({ onFiltersChange, availableLabels, availabl
               <div className="space-y-2">
                 {availableLabels.length > 0 ? (
                   availableLabels.map((label) => (
-                    <div key={label} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`label-${label}`}
-                        checked={filters.labels.includes(label)}
-                        onCheckedChange={() => handleLabelChange(label)}
-                      />
-                      <Label htmlFor={`label-${label}`} className="text-sm font-normal cursor-pointer">
-                        {label}
-                      </Label>
-                    </div>
+                    <LabelFilterOption
+                      key={label}
+                      label={label}
+                      checked={filters.labels.includes(label)}
+                      onToggle={() => handleLabelChange(label)}
+                    />
                   ))
                 ) : (
                   <p className="text-xs text-muted-foreground">No labels available</p>
@@ -134,16 +197,12 @@ export function BoardFiltersPopover({ onFiltersChange, availableLabels, availabl
               <div className="space-y-2">
                 {availableMembers.length > 0 ? (
                   availableMembers.map((member) => (
-                    <div key={member.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`member-${member.id}`}
-                        checked={filters.members.includes(member.id)}
-                        onCheckedChange={() => handleMemberChange(member.id)}
-                      />
-                      <Label htmlFor={`member-${member.id}`} className="text-sm font-normal cursor-pointer">
-                        {member.name}
-                      </Label>
-                    </div>
+                    <MemberFilterOption
+                      key={member.id}
+                      member={member}
+                      checked={filters.members.includes(member.id)}
+                      onToggle={() => handleMemberChange(member.id)}
+                    />
                   ))
                 ) : (
                   <p className="text-xs text-muted-foreground">No members available</p>

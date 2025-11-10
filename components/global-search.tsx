@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
-import { SearchFiltersPopover, type SearchFilters } from "@/components/search-filters-popover"
 import { CardDetailsModal } from "@/components/card-details-modal"
-import type { Card } from "@/store/types"
+import { getLabelColor } from "@/components/label-manager"
+import type { Card, Comment } from "@/store/types"
 import { useBoardStore } from "@/store/boards-store"
 import { useKanbanStore } from "@/store/kanban-store"
 
@@ -23,20 +23,99 @@ interface SearchResult {
   listTitle: string
   labels?: string[]
   members?: { id: string; name: string; avatar: string }[]
+  startDate?: string
   dueDate?: string
   comments?: number
   attachments?: number
+  searchableText: string
+}
+
+const flattenComments = (comments?: Comment[]): Comment[] => {
+  if (!comments || comments.length === 0) {
+    return []
+  }
+
+  const stack = [...comments]
+  const flattened: Comment[] = []
+
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current) continue
+    flattened.push(current)
+    if (current.replies && current.replies.length > 0) {
+      stack.push(...current.replies)
+    }
+  }
+
+  return flattened
+}
+
+const getDateStrings = (dateValue?: string | Date): string[] => {
+  if (!dateValue) return []
+
+  const parsed = dateValue instanceof Date ? dateValue : new Date(dateValue)
+  const raw = dateValue instanceof Date ? dateValue.toISOString() : dateValue
+
+  const strings = [raw]
+
+  if (!Number.isNaN(parsed.getTime())) {
+    strings.push(parsed.toLocaleDateString())
+    strings.push(parsed.toDateString())
+  }
+
+  return strings
+}
+
+const buildSearchIndexForCard = (card: Card, listTitle: string, boardTitle: string) => {
+  const commentNodes = flattenComments(card.comments)
+  const commentStrings = commentNodes.flatMap((comment) => [
+    comment.text,
+    comment.author,
+    ...getDateStrings(comment.timestamp),
+  ])
+
+  const checklistStrings =
+    card.checklists?.flatMap((checklist) => [checklist.title, ...checklist.items.map((item) => item.text)]) ?? []
+
+  const attachmentStrings =
+    card.attachments?.flatMap((attachment) => [
+      attachment.name,
+      attachment.type,
+      attachment.size,
+      ...getDateStrings(attachment.uploadedAt),
+    ]) ?? []
+
+  const memberStrings = card.members?.flatMap((member) => [member.name, member.id, member.avatar]) ?? []
+
+  const dateStrings = [...getDateStrings(card.startDate), ...getDateStrings(card.dueDate)]
+
+  const baseFields = [
+    boardTitle,
+    listTitle,
+    card.title,
+    card.description,
+    ...(card.labels ?? []),
+    ...memberStrings,
+    ...attachmentStrings,
+    ...checklistStrings,
+    ...commentStrings,
+    ...dateStrings,
+  ]
+
+  const searchableText = baseFields
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ")
+    .toLowerCase()
+
+  return {
+    searchableText,
+    commentCount: commentNodes.length,
+  }
 }
 
 export function GlobalSearch() {
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [filters, setFilters] = useState<SearchFilters>({
-    labels: [],
-    members: [],
-    dueDates: [],
-    keywords: [],
-  })
   const [selectedCardRef, setSelectedCardRef] = useState<{ boardId: string; listId: string; cardId: string } | null>(
     null,
   )
@@ -65,68 +144,6 @@ export function GlobalSearch() {
     [getLists],
   )
 
-  const matchesFilters = useCallback((result: SearchResult): boolean => {
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-
-    // Label filter
-    if (filters.labels.length > 0) {
-      const hasMatchingLabel = result.labels?.some((label) => filters.labels.includes(label))
-      if (!hasMatchingLabel) return false
-    }
-
-    // Member filter
-    if (filters.members.length > 0) {
-      const hasMatchingMember = result.members?.some((member) => filters.members.includes(member.id))
-      if (!hasMatchingMember) return false
-    }
-
-    // Due date filter
-    if (filters.dueDates.length > 0) {
-      if (!result.dueDate) return false
-
-      const dueDate = new Date(result.dueDate)
-      const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate())
-
-      let matches = false
-      for (const dateFilter of filters.dueDates) {
-        if (dateFilter === "overdue" && dueDateOnly < today) {
-          matches = true
-          break
-        }
-        if (dateFilter === "today" && dueDateOnly.getTime() === today.getTime()) {
-          matches = true
-          break
-        }
-        if (dateFilter === "upcoming") {
-          const sevenDaysFromNow = new Date(today)
-          sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
-          if (dueDateOnly > today && dueDateOnly <= sevenDaysFromNow) {
-            matches = true
-            break
-          }
-        }
-      }
-      if (!matches) return false
-    }
-
-    // Keyword filter
-    if (filters.keywords.length > 0) {
-      const keywords = filters.keywords.map((k) => k.toLowerCase())
-      const searchableText = (
-        result.cardTitle +
-        " " +
-        (result.cardDescription || "") +
-        " " +
-        (result.labels?.join(" ") || "")
-      ).toLowerCase()
-      const hasMatchingKeyword = keywords.some((kw) => searchableText.includes(kw))
-      if (!hasMatchingKeyword) return false
-    }
-
-    return true
-  }, [filters])
-
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return []
 
@@ -136,60 +153,38 @@ export function GlobalSearch() {
     boardData.forEach((board) => {
       board.lists.forEach((list) => {
         list.cards.forEach((card) => {
-          const titleMatch = card.title.toLowerCase().includes(query)
-          const descriptionMatch = card.description?.toLowerCase().includes(query)
-          const labelMatch = card.labels?.some((label) => label.toLowerCase().includes(query))
+          const { searchableText, commentCount } = buildSearchIndexForCard(card, list.title, board.title)
 
-          if (titleMatch || descriptionMatch || labelMatch) {
-            results.push({
-              cardId: card.id,
-              cardTitle: card.title,
-              cardDescription: card.description,
-              boardId: board.id,
-              boardTitle: board.title,
-              listId: list.id,
-              listTitle: list.title,
-              labels: card.labels,
-              members: card.members,
-              dueDate: card.dueDate,
-              comments: card.comments?.length,
-              attachments: card.attachments?.length,
-            })
+          if (!searchableText.includes(query)) {
+            return
           }
-        })
-      })
-    })
 
-    return results.filter(matchesFilters)
-  }, [searchQuery, filters, boardData, matchesFilters])
+          const totalAttachments = card.attachments?.length ?? 0
+          const attachmentsValue = totalAttachments > 0 ? totalAttachments : undefined
+          const commentsValue = commentCount > 0 ? commentCount : undefined
 
-  const availableLabels = useMemo(() => {
-    const labels = new Set<string>()
-    boardData.forEach((board) => {
-      board.lists.forEach((list) => {
-        list.cards.forEach((card) => {
-          card.labels?.forEach((label) => labels.add(label))
-        })
-      })
-    })
-    return Array.from(labels).sort()
-  }, [boardData])
-
-  const availableMembers = useMemo(() => {
-    const memberMap = new Map<string, { id: string; name: string; avatar: string }>()
-    boardData.forEach((board) => {
-      board.lists.forEach((list) => {
-        list.cards.forEach((card) => {
-          card.members?.forEach((member) => {
-            if (!memberMap.has(member.id)) {
-              memberMap.set(member.id, member)
-            }
+          results.push({
+            cardId: card.id,
+            cardTitle: card.title,
+            cardDescription: card.description,
+            boardId: board.id,
+            boardTitle: board.title,
+            listId: list.id,
+            listTitle: list.title,
+            labels: card.labels,
+            members: card.members,
+            startDate: card.startDate,
+            dueDate: card.dueDate,
+            comments: commentsValue,
+            attachments: attachmentsValue,
+            searchableText,
           })
         })
       })
     })
-    return Array.from(memberMap.values())
-  }, [boardData])
+
+    return results
+  }, [searchQuery, boardData])
 
   const selectedCard = useMemo(() => {
     if (!selectedCardRef) return null
@@ -246,7 +241,7 @@ export function GlobalSearch() {
                   Start typing to search across all boards...
                 </div>
               ) : searchResults.length === 0 ? (
-                <CommandEmpty>No cards found matching your search and filters</CommandEmpty>
+                <CommandEmpty>No cards found matching your search</CommandEmpty>
               ) : (
                 <CommandGroup heading={`Found ${searchResults.length} card${searchResults.length !== 1 ? "s" : ""}`}>
                   {searchResults.map((result) => (
@@ -286,9 +281,12 @@ export function GlobalSearch() {
                         {result.labels && result.labels.length > 0 && (
                           <div className="flex items-center gap-1">
                             {result.labels.slice(0, 3).map((label) => (
-                              <Badge key={label} variant="secondary" className="text-xs px-2 py-0">
+                              <span
+                                key={label}
+                                className={`${getLabelColor(label)} text-xs px-2 py-0.5 rounded-full text-white font-medium`}
+                              >
                                 {label}
-                              </Badge>
+                              </span>
                             ))}
                           </div>
                         )}
@@ -319,13 +317,6 @@ export function GlobalSearch() {
           </Command>
         </PopoverContent>
       </Popover>
-
-      {/* Add filter popover next to search */}
-      <SearchFiltersPopover
-        onFiltersChange={setFilters}
-        availableLabels={availableLabels}
-        availableMembers={availableMembers}
-      />
 
       {/* Card Details Modal */}
       {selectedCard && (

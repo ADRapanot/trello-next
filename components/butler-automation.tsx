@@ -56,6 +56,7 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
   const boardRules = useMemo(() => {
     return allRules.filter(rule => rule.boardId === boardId)
   }, [allRules, boardId])
+  const totalRuleCount = boardRules.length
   
   const activeRules = useMemo(() => {
     let filtered = boardRules
@@ -302,12 +303,20 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
     <>
       <Button 
         variant="ghost" 
-        size="sm" 
-        className="text-white hover:bg-white/20"
+        size="icon" 
+        className="relative text-white hover:bg-white/20"
         onClick={() => setIsOpen(true)}
       >
-        <Zap className="h-4 w-4 mr-2" />
-        Butler
+        <Zap className="h-4 w-4" />
+        <span className="sr-only">Open Butler automations</span>
+        {totalRuleCount > 0 && (
+          <Badge 
+            variant="default" 
+            className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500 text-white text-xs"
+          >
+            {totalRuleCount > 9 ? "9+" : totalRuleCount}
+          </Badge>
+        )}
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>

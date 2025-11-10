@@ -35,6 +35,12 @@ export function createActivity(params: ActivityHelperParams): Activity {
 /**
  * Helper functions for creating specific activity types
  */
+const getCommentSnippet = (comment: string): string => {
+  const trimmed = comment.trim()
+  if (!trimmed) return "(empty comment)"
+  return trimmed.length > 50 ? `${trimmed.substring(0, 50)}...` : trimmed
+}
+
 export const ActivityHelpers = {
   cardCreated: (user: { name: string; avatar: string }, cardTitle: string, listTitle: string) =>
     createActivity({
@@ -327,8 +333,26 @@ export const ActivityHelpers = {
       type: "comment_added",
       user,
       description: `added comment to card "${cardTitle}"`,
-      itemName: comment.substring(0, 50) + (comment.length > 50 ? "..." : ""),
+    itemName: getCommentSnippet(comment),
       to: cardTitle,
+    }),
+
+  commentEdited: (user: { name: string; avatar: string }, cardTitle: string, comment: string) =>
+    createActivity({
+      type: "comment_edited",
+      user,
+      description: `edited comment on card "${cardTitle}"`,
+      itemName: getCommentSnippet(comment),
+      to: cardTitle,
+    }),
+
+  commentDeleted: (user: { name: string; avatar: string }, cardTitle: string, comment: string) =>
+    createActivity({
+      type: "comment_deleted",
+      user,
+      description: `deleted comment from card "${cardTitle}"`,
+      itemName: getCommentSnippet(comment),
+      from: cardTitle,
     }),
 
   dueDateAdded: (user: { name: string; avatar: string }, cardTitle: string, date: string) =>

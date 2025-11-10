@@ -3,14 +3,28 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 
-import type { Activity, Card, List } from "@/store/types"
+import type { Activity, ActivityNotification, Card, Comment, List } from "@/store/types"
 import { ActivityHelpers } from "@/lib/activity-helpers"
+import { buildNotificationsFromActivities, mergeActivitiesWithNotifications } from "@/lib/notification-helpers"
 
 // Default user for activity logging (can be replaced with real user context later)
 const DEFAULT_USER = {
   name: "John Doe",
   avatar: "JD",
 }
+
+type ActivityUser = {
+  name: string
+  avatar: string
+}
+
+interface ActivityOptions {
+  logActivity?: boolean
+  actor?: ActivityUser
+}
+
+const shouldLogActivity = (options?: ActivityOptions) => options?.logActivity ?? true
+const resolveActivityUser = (options?: ActivityOptions): ActivityUser => options?.actor ?? DEFAULT_USER
 
 interface ArchivedCardInfo {
   cardId: string
@@ -22,6 +36,7 @@ interface BoardKanbanState {
   archivedCards: ArchivedCardInfo[]
   archivedLists: List[]
   activities: Activity[]
+  notifications: ActivityNotification[]
   labels: string[]
 }
 
@@ -31,22 +46,39 @@ interface KanbanStoreValue {
   getLists: (boardId: string) => List[]
   getLabels: (boardId: string) => string[]
   getActivities: (boardId: string) => Activity[]
-  addList: (boardId: string, title: string) => void
-  addCard: (boardId: string, listId: string, title: string) => string
-  moveCard: (boardId: string, cardId: string, fromListId: string, toListId: string, toIndex: number) => void
-  moveAllCards: (boardId: string, fromListId: string, toListId: string) => void
-  moveList: (boardId: string, listId: string, toIndex: number) => void
-  archiveCard: (boardId: string, cardId: string, listId: string) => void
-  archiveList: (boardId: string, listId: string) => void
-  restoreCard: (boardId: string, cardId: string, originalListId: string) => void
-  deleteCard: (boardId: string, cardId: string) => void
-  renameList: (boardId: string, listId: string, newTitle: string) => void
-  copyList: (boardId: string, listId: string) => void
-  updateCard: (boardId: string, listId: string, cardId: string, updatedCard: Partial<Card>) => void
+  getNotifications: (boardId: string) => ActivityNotification[]
+  addList: (boardId: string, title: string, options?: ActivityOptions) => void
+  addCard: (boardId: string, listId: string, title: string, options?: ActivityOptions) => string
+  moveCard: (
+    boardId: string,
+    cardId: string,
+    fromListId: string,
+    toListId: string,
+    toIndex: number,
+    options?: ActivityOptions,
+  ) => void
+  moveAllCards: (boardId: string, fromListId: string, toListId: string, options?: ActivityOptions) => void
+  moveList: (boardId: string, listId: string, toIndex: number, options?: ActivityOptions) => void
+  archiveCard: (boardId: string, cardId: string, listId: string, options?: ActivityOptions) => void
+  archiveList: (boardId: string, listId: string, options?: ActivityOptions) => void
+  restoreCard: (boardId: string, cardId: string, originalListId: string, options?: ActivityOptions) => void
+  deleteCard: (boardId: string, cardId: string, options?: ActivityOptions) => void
+  renameList: (boardId: string, listId: string, newTitle: string, options?: ActivityOptions) => void
+  copyList: (boardId: string, listId: string, options?: ActivityOptions) => void
+  updateCard: (
+    boardId: string,
+    listId: string,
+    cardId: string,
+    updatedCard: Partial<Card>,
+    options?: ActivityOptions,
+  ) => void
   setActivities: (boardId: string, activities: Activity[]) => void
   addActivity: (boardId: string, activity: Activity) => void
-  renameLabelGlobally: (boardId: string, oldName: string, newName: string) => void
-  deleteLabelGlobally: (boardId: string, labelName: string) => void
+  markNotificationAsRead: (boardId: string, notificationId: string) => void
+  markAllNotificationsAsRead: (boardId: string) => void
+  removeNotification: (boardId: string, notificationId: string) => void
+  renameLabelGlobally: (boardId: string, oldName: string, newName: string, options?: ActivityOptions) => void
+  deleteLabelGlobally: (boardId: string, labelName: string, options?: ActivityOptions) => void
 }
 
 const defaultActivitySeed: Activity[] = [
@@ -191,6 +223,10 @@ const defaultBoardState: BoardKanbanState = {
   archivedCards: [],
   archivedLists: [],
   activities: defaultActivitySeed,
+  notifications: buildNotificationsFromActivities(defaultActivitySeed).map((notification) => ({
+    ...notification,
+    read: true,
+  })),
   labels: [
     "Research",
     "High Priority",
@@ -208,8 +244,38 @@ const createEmptyBoardState = (): BoardKanbanState => ({
   archivedCards: [],
   archivedLists: [],
   activities: [],
+  notifications: [],
   labels: [],
 })
+
+const cloneComments = (comments?: Comment[]): Comment[] => {
+  if (!comments) return []
+  return comments.map((comment) => {
+    const replies = cloneComments(comment.replies)
+    return {
+      ...comment,
+      timestamp: new Date(comment.timestamp),
+      replies,
+    }
+  })
+}
+
+const flattenComments = (comments?: Comment[]): Comment[] => {
+  if (!comments) return []
+  const result: Comment[] = []
+
+  const traverse = (items: Comment[]) => {
+    items.forEach((comment) => {
+      result.push(comment)
+      if (comment.replies && comment.replies.length > 0) {
+        traverse(comment.replies)
+      }
+    })
+  }
+
+  traverse(comments)
+  return result
+}
 
 const cloneLists = (lists: List[]): List[] =>
   lists.map((list) => ({
@@ -219,7 +285,7 @@ const cloneLists = (lists: List[]): List[] =>
       labels: card.labels ? [...card.labels] : [],
       members: card.members ? card.members.map((member) => ({ ...member })) : [],
       attachments: card.attachments ? card.attachments.map((attachment) => ({ ...attachment })) : [],
-      comments: card.comments ? card.comments.map((comment) => ({ ...comment, timestamp: new Date(comment.timestamp) })) : [],
+      comments: cloneComments(card.comments),
       checklists: card.checklists
         ? card.checklists.map((checklist) => ({
             ...checklist,
@@ -238,6 +304,40 @@ const computeLabels = (lists: List[]): string[] => {
   })
   return Array.from(set).sort()
 }
+
+type BoardStateUpdates = Partial<Omit<BoardKanbanState, "activities" | "notifications">>
+
+const applyBoardUpdatesWithActivities = (
+  current: BoardKanbanState,
+  updates: BoardStateUpdates,
+  newActivities: Activity[],
+): BoardKanbanState => {
+  if (!newActivities.length) {
+    if (Object.keys(updates).length === 0) {
+      return current
+    }
+    return { ...current, ...updates }
+  }
+
+  const { activities, notifications } = mergeActivitiesWithNotifications(
+    current.activities,
+    newActivities,
+    current.notifications,
+  )
+
+  return {
+    ...current,
+    ...updates,
+    activities,
+    notifications,
+  }
+}
+
+const replaceBoardActivities = (current: BoardKanbanState, activities: Activity[]): BoardKanbanState => ({
+  ...current,
+  activities,
+  notifications: buildNotificationsFromActivities(activities, current.notifications),
+})
 
 const KanbanStoreContext = createContext<KanbanStoreValue | undefined>(undefined)
 
@@ -282,23 +382,22 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
   )
 
   const addList = useCallback(
-    (boardId: string, title: string) => {
+    (boardId: string, title: string, options?: ActivityOptions) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const lists = [...current.lists, { id: Date.now().toString(), title, cards: [] }]
-        const activity = ActivityHelpers.listCreated(DEFAULT_USER, title)
-        return {
-          ...current,
-          lists,
-          activities: [activity, ...current.activities],
+        if (!shouldLogActivity(options)) {
+          return applyBoardUpdatesWithActivities(current, { lists }, [])
         }
+        const activity = ActivityHelpers.listCreated(resolveActivityUser(options), title)
+        return applyBoardUpdatesWithActivities(current, { lists }, [activity])
       })
     },
     [setBoardState],
   )
 
   const addCard = useCallback(
-    (boardId: string, listId: string, title: string): string => {
+    (boardId: string, listId: string, title: string, options?: ActivityOptions): string => {
       if (!boardId) return ""
       const newCardId = Date.now().toString()
       setBoardState(boardId, (current) => {
@@ -306,13 +405,12 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         const list = lists.find((l) => l.id === listId)
         if (!list) return current
         list.cards.push({ id: newCardId, title, attachments: [], comments: [], checklists: [] })
-        const activity = ActivityHelpers.cardCreated(DEFAULT_USER, title, list.title)
-        return {
-          ...current,
-          lists,
-          labels: computeLabels(lists),
-          activities: [activity, ...current.activities],
+        const labels = computeLabels(lists)
+        if (!shouldLogActivity(options)) {
+          return applyBoardUpdatesWithActivities(current, { lists, labels }, [])
         }
+        const activity = ActivityHelpers.cardCreated(resolveActivityUser(options), title, list.title)
+        return applyBoardUpdatesWithActivities(current, { lists, labels }, [activity])
       })
       return newCardId
     },
@@ -320,7 +418,14 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
   )
 
   const moveCard = useCallback(
-    (boardId: string, cardId: string, fromListId: string, toListId: string, toIndex: number) => {
+    (
+      boardId: string,
+      cardId: string,
+      fromListId: string,
+      toListId: string,
+      toIndex: number,
+      options?: ActivityOptions,
+    ) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const lists = cloneLists(current.lists)
@@ -339,22 +444,19 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         toList.cards.splice(toIndex, 0, card)
 
         // Only log activity if moving between different lists
-        const activities = fromListId !== toListId
-          ? [ActivityHelpers.cardMoved(DEFAULT_USER, card.title, fromList.title, toList.title), ...current.activities]
-          : current.activities
+        const activity =
+          shouldLogActivity(options) && fromListId !== toListId
+            ? ActivityHelpers.cardMoved(resolveActivityUser(options), card.title, fromList.title, toList.title)
+            : null
 
-        return {
-          ...current,
-          lists,
-          activities,
-        }
+        return applyBoardUpdatesWithActivities(current, { lists }, activity ? [activity] : [])
       })
     },
     [setBoardState],
   )
 
   const moveAllCards = useCallback(
-    (boardId: string, fromListId: string, toListId: string) => {
+    (boardId: string, fromListId: string, toListId: string, options?: ActivityOptions) => {
       if (!boardId || fromListId === toListId) return
       setBoardState(boardId, (current) => {
         const lists = cloneLists(current.lists)
@@ -367,12 +469,16 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         if (cardCount > 0) {
           toList.cards.push(...fromList.cards)
           fromList.cards = []
-          const activity = ActivityHelpers.cardsMovedAll(DEFAULT_USER, fromList.title, toList.title, cardCount)
-          return {
-            ...current,
-            lists,
-            activities: [activity, ...current.activities],
+          if (!shouldLogActivity(options)) {
+            return applyBoardUpdatesWithActivities(current, { lists }, [])
           }
+          const activity = ActivityHelpers.cardsMovedAll(
+            resolveActivityUser(options),
+            fromList.title,
+            toList.title,
+            cardCount,
+          )
+          return applyBoardUpdatesWithActivities(current, { lists }, [activity])
         }
 
         return {
@@ -385,7 +491,7 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
   )
 
   const moveList = useCallback(
-    (boardId: string, listId: string, toIndex: number) => {
+    (boardId: string, listId: string, toIndex: number, options?: ActivityOptions) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const lists = cloneLists(current.lists)
@@ -398,20 +504,19 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         const [list] = lists.splice(fromIndex, 1)
         lists.splice(adjustedIndex, 0, list)
 
-        const activity = ActivityHelpers.listMoved(DEFAULT_USER, list.title, adjustedIndex)
-
-        return {
-          ...current,
-          lists,
-          activities: [activity, ...current.activities],
+        if (!shouldLogActivity(options)) {
+          return applyBoardUpdatesWithActivities(current, { lists }, [])
         }
+        const activity = ActivityHelpers.listMoved(resolveActivityUser(options), list.title, adjustedIndex)
+
+        return applyBoardUpdatesWithActivities(current, { lists }, [activity])
       })
     },
     [setBoardState],
   )
 
   const archiveCard = useCallback(
-    (boardId: string, cardId: string, listId: string) => {
+    (boardId: string, cardId: string, listId: string, options?: ActivityOptions) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const lists = cloneLists(current.lists)
@@ -422,22 +527,23 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         if (!card) return current
 
         list.cards = list.cards.filter((c) => c.id !== cardId)
-        const activity = ActivityHelpers.cardArchived(DEFAULT_USER, card.title)
+        const archivedCards = [...current.archivedCards, { cardId, listId }]
+        const labels = computeLabels(lists)
 
-        return {
-          ...current,
-          lists,
-          archivedCards: [...current.archivedCards, { cardId, listId }],
-          labels: computeLabels(lists),
-          activities: [activity, ...current.activities],
+        if (!shouldLogActivity(options)) {
+          return applyBoardUpdatesWithActivities(current, { lists, archivedCards, labels }, [])
         }
+
+        const activity = ActivityHelpers.cardArchived(resolveActivityUser(options), card.title)
+
+        return applyBoardUpdatesWithActivities(current, { lists, archivedCards, labels }, [activity])
       })
     },
     [setBoardState],
   )
 
   const archiveList = useCallback(
-    (boardId: string, listId: string) => {
+    (boardId: string, listId: string, options?: ActivityOptions) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const lists = cloneLists(current.lists)
@@ -445,22 +551,27 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         if (listIndex === -1) return current
 
         const [archivedList] = lists.splice(listIndex, 1)
-        const activity = ActivityHelpers.listArchived(DEFAULT_USER, archivedList.title, archivedList.cards.length)
+        const archivedLists = [...current.archivedLists, archivedList]
+        const labels = computeLabels(lists)
 
-        return {
-          ...current,
-          lists,
-          archivedLists: [...current.archivedLists, archivedList],
-          labels: computeLabels(lists),
-          activities: [activity, ...current.activities],
+        if (!shouldLogActivity(options)) {
+          return applyBoardUpdatesWithActivities(current, { lists, archivedLists, labels }, [])
         }
+
+        const activity = ActivityHelpers.listArchived(
+          resolveActivityUser(options),
+          archivedList.title,
+          archivedList.cards.length,
+        )
+
+        return applyBoardUpdatesWithActivities(current, { lists, archivedLists, labels }, [activity])
       })
     },
     [setBoardState],
   )
 
   const restoreCard = useCallback(
-    (boardId: string, cardId: string, originalListId: string) => {
+    (boardId: string, cardId: string, originalListId: string, options?: ActivityOptions) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const archivedInfo = current.archivedCards.find((ac) => ac.cardId === cardId)
@@ -480,22 +591,27 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         if (!targetList) return current
 
         targetList.cards = [...targetList.cards, archivedCard]
-        const activity = ActivityHelpers.cardRestored(DEFAULT_USER, archivedCard.title, targetList.title)
+        const archivedCards = current.archivedCards.filter((ac) => ac.cardId !== cardId)
+        const labels = computeLabels(lists)
 
-        return {
-          ...current,
-          lists,
-          archivedCards: current.archivedCards.filter((ac) => ac.cardId !== cardId),
-          labels: computeLabels(lists),
-          activities: [activity, ...current.activities],
+        if (!shouldLogActivity(options)) {
+          return applyBoardUpdatesWithActivities(current, { lists, archivedCards, labels }, [])
         }
+
+        const activity = ActivityHelpers.cardRestored(
+          resolveActivityUser(options),
+          archivedCard.title,
+          targetList.title,
+        )
+
+        return applyBoardUpdatesWithActivities(current, { lists, archivedCards, labels }, [activity])
       })
     },
     [setBoardState],
   )
 
   const deleteCard = useCallback(
-    (boardId: string, cardId: string) => {
+    (boardId: string, cardId: string, options?: ActivityOptions) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         // Try to find the card in archived lists to get its title
@@ -504,20 +620,23 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
           .find((c) => c.id === cardId)
         
         const cardTitle = archivedCard?.title || "Unknown card"
-        const activity = ActivityHelpers.cardDeleted(DEFAULT_USER, cardTitle)
 
-        return {
-          ...current,
-          archivedCards: current.archivedCards.filter((ac) => ac.cardId !== cardId),
-          activities: [activity, ...current.activities],
+        const archivedCards = current.archivedCards.filter((ac) => ac.cardId !== cardId)
+
+        if (!shouldLogActivity(options)) {
+          return applyBoardUpdatesWithActivities(current, { archivedCards }, [])
         }
+
+        const activity = ActivityHelpers.cardDeleted(resolveActivityUser(options), cardTitle)
+
+        return applyBoardUpdatesWithActivities(current, { archivedCards }, [activity])
       })
     },
     [setBoardState],
   )
 
   const renameList = useCallback(
-    (boardId: string, listId: string, newTitle: string) => {
+    (boardId: string, listId: string, newTitle: string, options?: ActivityOptions) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const lists = cloneLists(current.lists)
@@ -525,19 +644,18 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         if (!list) return current
         const oldTitle = list.title
         list.title = newTitle
-        const activity = ActivityHelpers.listRenamed(DEFAULT_USER, oldTitle, newTitle)
-        return {
-          ...current,
-          lists,
-          activities: [activity, ...current.activities],
+        if (!shouldLogActivity(options)) {
+          return applyBoardUpdatesWithActivities(current, { lists }, [])
         }
+        const activity = ActivityHelpers.listRenamed(resolveActivityUser(options), oldTitle, newTitle)
+        return applyBoardUpdatesWithActivities(current, { lists }, [activity])
       })
     },
     [setBoardState],
   )
 
   const copyList = useCallback(
-    (boardId: string, listId: string) => {
+    (boardId: string, listId: string, options?: ActivityOptions) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const lists = cloneLists(current.lists)
@@ -553,7 +671,7 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
             labels: card.labels ? [...card.labels] : [],
             members: card.members ? card.members.map((member) => ({ ...member })) : [],
             attachments: card.attachments ? card.attachments.map((attachment) => ({ ...attachment })) : [],
-            comments: card.comments ? card.comments.map((comment) => ({ ...comment, timestamp: new Date(comment.timestamp) })) : [],
+            comments: cloneComments(card.comments),
             checklists: card.checklists
               ? card.checklists.map((checklist) => ({
                   ...checklist,
@@ -563,21 +681,23 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
           })),
         }
 
-        const activity = ActivityHelpers.listCopied(DEFAULT_USER, listToCopy.title, newList.title)
+        const nextLists = [...lists, newList]
+        const labels = computeLabels(nextLists)
 
-        return {
-          ...current,
-          lists: [...lists, newList],
-          labels: computeLabels([...lists, newList]),
-          activities: [activity, ...current.activities],
+        if (!shouldLogActivity(options)) {
+          return applyBoardUpdatesWithActivities(current, { lists: nextLists, labels }, [])
         }
+
+        const activity = ActivityHelpers.listCopied(resolveActivityUser(options), listToCopy.title, newList.title)
+
+        return applyBoardUpdatesWithActivities(current, { lists: nextLists, labels }, [activity])
       })
     },
     [setBoardState],
   )
 
   const updateCard = useCallback(
-    (boardId: string, listId: string, cardId: string, updatedCard: Partial<Card>) => {
+    (boardId: string, listId: string, cardId: string, updatedCard: Partial<Card>, options?: ActivityOptions) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const lists = cloneLists(current.lists)
@@ -596,51 +716,90 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
 
         // Determine what changed and create appropriate activities
         const activities: Activity[] = []
+        const canLogActivities = shouldLogActivity(options)
+        const activityUser = resolveActivityUser(options)
         
-        // Check for title change
-        if (updatedCard.title && updatedCard.title !== existingCard.title) {
-          activities.push(ActivityHelpers.cardRenamed(DEFAULT_USER, existingCard.title, updatedCard.title))
-        }
-        
-        // Check for description change
-        if (updatedCard.description !== undefined && updatedCard.description !== existingCard.description) {
-          activities.push(ActivityHelpers.cardDescriptionChanged(DEFAULT_USER, mergedCard.title))
-        }
-        
-        // Check for due date changes
-        if (updatedCard.dueDate !== undefined) {
-          if (!existingCard.dueDate && updatedCard.dueDate) {
-            activities.push(ActivityHelpers.dueDateAdded(DEFAULT_USER, mergedCard.title, updatedCard.dueDate))
-          } else if (existingCard.dueDate && !updatedCard.dueDate) {
-            activities.push(ActivityHelpers.dueDateRemoved(DEFAULT_USER, mergedCard.title))
-          } else if (existingCard.dueDate && updatedCard.dueDate && existingCard.dueDate !== updatedCard.dueDate) {
-            activities.push(ActivityHelpers.dueDateChanged(DEFAULT_USER, mergedCard.title, existingCard.dueDate, updatedCard.dueDate))
+        if (canLogActivities) {
+          // Check for title change
+          if (updatedCard.title && updatedCard.title !== existingCard.title) {
+            activities.push(ActivityHelpers.cardRenamed(activityUser, existingCard.title, updatedCard.title))
+          }
+          
+          // Check for description change
+          if (updatedCard.description !== undefined && updatedCard.description !== existingCard.description) {
+            activities.push(ActivityHelpers.cardDescriptionChanged(activityUser, mergedCard.title))
+          }
+          
+          // Check for due date changes
+          if (updatedCard.dueDate !== undefined) {
+            if (!existingCard.dueDate && updatedCard.dueDate) {
+              activities.push(ActivityHelpers.dueDateAdded(activityUser, mergedCard.title, updatedCard.dueDate))
+            } else if (existingCard.dueDate && !updatedCard.dueDate) {
+              activities.push(ActivityHelpers.dueDateRemoved(activityUser, mergedCard.title))
+            } else if (
+              existingCard.dueDate &&
+              updatedCard.dueDate &&
+              existingCard.dueDate !== updatedCard.dueDate
+            ) {
+              activities.push(
+                ActivityHelpers.dueDateChanged(activityUser, mergedCard.title, existingCard.dueDate, updatedCard.dueDate),
+              )
+            }
+          }
+
+          // Check for start date changes
+          if (updatedCard.startDate !== undefined) {
+            if (!existingCard.startDate && updatedCard.startDate) {
+              activities.push(ActivityHelpers.startDateAdded(activityUser, mergedCard.title, updatedCard.startDate))
+            } else if (existingCard.startDate && !updatedCard.startDate) {
+              activities.push(ActivityHelpers.startDateRemoved(activityUser, mergedCard.title))
+            } else if (
+              existingCard.startDate &&
+              updatedCard.startDate &&
+              existingCard.startDate !== updatedCard.startDate
+            ) {
+              activities.push(
+                ActivityHelpers.startDateChanged(activityUser, mergedCard.title, existingCard.startDate, updatedCard.startDate),
+              )
+            }
+          }
+
+          // Check for comment changes
+          if (updatedCard.comments) {
+            const existingCommentMap = new Map(
+              flattenComments(existingCard.comments).map((comment) => [comment.id, comment]),
+            )
+            const nextComments = flattenComments(updatedCard.comments)
+            const nextCommentMap = new Map(nextComments.map((comment) => [comment.id, comment]))
+
+            nextComments.forEach((comment) => {
+              const previous = existingCommentMap.get(comment.id)
+              if (!previous) {
+                activities.push(ActivityHelpers.commentAdded(activityUser, mergedCard.title, comment.text))
+              } else if (previous.text !== comment.text) {
+                activities.push(ActivityHelpers.commentEdited(activityUser, mergedCard.title, comment.text))
+              }
+            })
+
+            existingCommentMap.forEach((comment, id) => {
+              if (!nextCommentMap.has(id)) {
+                activities.push(ActivityHelpers.commentDeleted(activityUser, mergedCard.title, comment.text))
+              }
+            })
+          }
+
+          // If no specific activities created, create a generic update activity
+          const hasNonCommentUpdates = Object.keys(updatedCard).some((key) => key !== "comments")
+          if (activities.length === 0 && hasNonCommentUpdates) {
+            const changeKeys = Object.keys(updatedCard).filter((key) => key !== "comments")
+            const changes = changeKeys.join(", ")
+            activities.push(ActivityHelpers.cardUpdated(activityUser, mergedCard.title, changes))
           }
         }
 
-        // Check for start date changes
-        if (updatedCard.startDate !== undefined) {
-          if (!existingCard.startDate && updatedCard.startDate) {
-            activities.push(ActivityHelpers.startDateAdded(DEFAULT_USER, mergedCard.title, updatedCard.startDate))
-          } else if (existingCard.startDate && !updatedCard.startDate) {
-            activities.push(ActivityHelpers.startDateRemoved(DEFAULT_USER, mergedCard.title))
-          } else if (existingCard.startDate && updatedCard.startDate && existingCard.startDate !== updatedCard.startDate) {
-            activities.push(ActivityHelpers.startDateChanged(DEFAULT_USER, mergedCard.title, existingCard.startDate, updatedCard.startDate))
-          }
-        }
+        const labels = computeLabels(lists)
 
-        // If no specific activities created, create a generic update activity
-        if (activities.length === 0 && Object.keys(updatedCard).length > 0) {
-          const changes = Object.keys(updatedCard).join(", ")
-          activities.push(ActivityHelpers.cardUpdated(DEFAULT_USER, mergedCard.title, changes))
-        }
-
-        return {
-          ...current,
-          lists,
-          labels: computeLabels(lists),
-          activities: [...activities, ...current.activities],
-        }
+        return applyBoardUpdatesWithActivities(current, { lists, labels }, canLogActivities ? activities : [])
       })
     },
     [setBoardState],
@@ -664,13 +823,19 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
     [state],
   )
 
+  const getNotifications = useCallback(
+    (boardId: string) => {
+      const board = state[boardId]
+      if (!board) return []
+      return board.notifications
+    },
+    [state],
+  )
+
   const setActivities = useCallback(
     (boardId: string, activities: Activity[]) => {
       if (!boardId) return
-      setBoardState(boardId, (current) => ({
-        ...current,
-        activities,
-      }))
+      setBoardState(boardId, (current) => replaceBoardActivities(current, activities))
     },
     [setBoardState],
   )
@@ -678,16 +843,58 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
   const addActivity = useCallback(
     (boardId: string, activity: Activity) => {
       if (!boardId) return
-      setBoardState(boardId, (current) => ({
-        ...current,
-        activities: [activity, ...current.activities],
-      }))
+      setBoardState(boardId, (current) => applyBoardUpdatesWithActivities(current, {}, [activity]))
+    },
+    [setBoardState],
+  )
+
+  const markNotificationAsRead = useCallback(
+    (boardId: string, notificationId: string) => {
+      if (!boardId || !notificationId) return
+      setBoardState(boardId, (current) => {
+        let hasChanges = false
+        const notifications = current.notifications.map((notification) => {
+          if (notification.id !== notificationId) return notification
+          if (notification.read) return notification
+          hasChanges = true
+          return { ...notification, read: true }
+        })
+        if (!hasChanges) return current
+        return { ...current, notifications }
+      })
+    },
+    [setBoardState],
+  )
+
+  const markAllNotificationsAsRead = useCallback(
+    (boardId: string) => {
+      if (!boardId) return
+      setBoardState(boardId, (current) => {
+        const hasUnread = current.notifications.some((notification) => !notification.read)
+        if (!hasUnread) return current
+        const notifications = current.notifications.map((notification) =>
+          notification.read ? notification : { ...notification, read: true },
+        )
+        return { ...current, notifications }
+      })
+    },
+    [setBoardState],
+  )
+
+  const removeNotification = useCallback(
+    (boardId: string, notificationId: string) => {
+      if (!boardId || !notificationId) return
+      setBoardState(boardId, (current) => {
+        const notifications = current.notifications.filter((notification) => notification.id !== notificationId)
+        if (notifications.length === current.notifications.length) return current
+        return { ...current, notifications }
+      })
     },
     [setBoardState],
   )
 
   const renameLabelGlobally = useCallback(
-    (boardId: string, oldName: string, newName: string) => {
+    (boardId: string, oldName: string, newName: string, options?: ActivityOptions) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const lists = cloneLists(current.lists)
@@ -701,21 +908,22 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
           })
         })
         
-        const activity = ActivityHelpers.labelRenamed(DEFAULT_USER, oldName, newName)
-        
-        return {
-          ...current,
-          lists,
-          labels: computeLabels(lists),
-          activities: [activity, ...current.activities],
+        const labels = computeLabels(lists)
+
+        if (!shouldLogActivity(options)) {
+          return applyBoardUpdatesWithActivities(current, { lists, labels }, [])
         }
+
+        const activity = ActivityHelpers.labelRenamed(resolveActivityUser(options), oldName, newName)
+        
+        return applyBoardUpdatesWithActivities(current, { lists, labels }, [activity])
       })
     },
     [setBoardState],
   )
 
   const deleteLabelGlobally = useCallback(
-    (boardId: string, labelName: string) => {
+    (boardId: string, labelName: string, options?: ActivityOptions) => {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const lists = cloneLists(current.lists)
@@ -729,14 +937,15 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
           })
         })
         
-        const activity = ActivityHelpers.labelDeleted(DEFAULT_USER, labelName)
-        
-        return {
-          ...current,
-          lists,
-          labels: computeLabels(lists),
-          activities: [activity, ...current.activities],
+        const labels = computeLabels(lists)
+
+        if (!shouldLogActivity(options)) {
+          return applyBoardUpdatesWithActivities(current, { lists, labels }, [])
         }
+
+        const activity = ActivityHelpers.labelDeleted(resolveActivityUser(options), labelName)
+        
+        return applyBoardUpdatesWithActivities(current, { lists, labels }, [activity])
       })
     },
     [setBoardState],
@@ -747,6 +956,7 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
       getLists,
       getLabels,
       getActivities,
+      getNotifications,
       addList,
       addCard,
       moveCard,
@@ -761,6 +971,9 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
       updateCard,
       setActivities,
       addActivity,
+      markNotificationAsRead,
+      markAllNotificationsAsRead,
+      removeNotification,
       renameLabelGlobally,
       deleteLabelGlobally,
     }),
@@ -775,10 +988,14 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
       deleteLabelGlobally,
       getActivities,
       getLabels,
+      getNotifications,
       getLists,
+      markAllNotificationsAsRead,
+      markNotificationAsRead,
       moveCard,
       moveAllCards,
       moveList,
+      removeNotification,
       renameLabelGlobally,
       renameList,
       restoreCard,
