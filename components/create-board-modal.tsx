@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { boardIconOptions, defaultBoardIconId } from "@/lib/board-icons"
 
 interface CreateBoardModalProps {
   open: boolean
@@ -25,30 +26,20 @@ const backgroundOptions = [
   { id: "8", class: "bg-gradient-to-br from-indigo-500 to-indigo-700", name: "Indigo Night" },
 ]
 
-const avatarOptions = [
-  { id: "rocket", icon: "🚀", name: "Rocket" },
-  { id: "lightbulb", icon: "💡", name: "Idea" },
-  { id: "palette", icon: "🎨", name: "Palette" },
-  { id: "target", icon: "🎯", name: "Target" },
-  { id: "megaphone", icon: "📣", name: "Megaphone" },
-  { id: "chart", icon: "📊", name: "Analytics" },
-  { id: "gear", icon: "⚙️", name: "Settings" },
-  { id: "sparkles", icon: "✨", name: "Sparkles" },
-]
-
 export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBoardModalProps) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [selectedBackground, setSelectedBackground] = useState(backgroundOptions[0].class)
-  const [selectedAvatar, setSelectedAvatar] = useState(avatarOptions[0].icon)
+  const [selectedIcon, setSelectedIcon] = useState(defaultBoardIconId)
 
   const handleCreate = () => {
     if (title.trim()) {
-      onCreateBoard(title, selectedBackground, selectedAvatar, description.trim() || undefined)
+      const iconToUse = selectedIcon || defaultBoardIconId
+      onCreateBoard(title, selectedBackground, iconToUse, description.trim() || undefined)
       setTitle("")
       setDescription("")
       setSelectedBackground(backgroundOptions[0].class)
-      setSelectedAvatar(avatarOptions[0].icon)
+      setSelectedIcon(defaultBoardIconId)
       onOpenChange(false)
     }
   }
@@ -104,20 +95,18 @@ export function CreateBoardModal({ open, onOpenChange, onCreateBoard }: CreateBo
           <div className="space-y-2">
             <Label>Board Avatar</Label>
             <div className="grid grid-cols-6 gap-2">
-              {avatarOptions.map((avatar) => (
+              {boardIconOptions.map((option) => (
                 <button
-                  key={avatar.id}
+                  key={option.id}
                   className={cn(
-                    "h-12 rounded-lg border border-transparent bg-white/10 text-2xl flex items-center justify-center transition-colors",
-                    selectedAvatar === avatar.icon
-                      ? "border-primary bg-primary/10"
-                      : "hover:bg-white/20",
+                    "h-12 rounded-lg border border-transparent bg-white/10 flex items-center justify-center transition-all",
+                    selectedIcon === option.id ? "border-primary bg-primary/10 shadow-sm" : "hover:bg-white/20",
                   )}
-                  onClick={() => setSelectedAvatar(avatar.icon)}
-                  title={avatar.name}
+                  onClick={() => setSelectedIcon(option.id)}
+                  title={option.name}
                   type="button"
                 >
-                  <span>{avatar.icon}</span>
+                  <option.Icon className="h-6 w-6 text-white" />
                 </button>
               ))}
             </div>

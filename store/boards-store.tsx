@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react"
 import type { ReactNode } from "react"
+import { defaultBoardIconId } from "@/lib/board-icons"
 
 export interface Board {
   id: string
@@ -42,42 +43,42 @@ const INITIAL_BOARDS: Board[] = [
     id: "1",
     title: "Product Roadmap",
     background: "bg-gradient-to-br from-blue-500 to-blue-700",
-    icon: "🚀",
+    icon: "rocket",
     isFavorite: true,
   },
   {
     id: "2",
     title: "Marketing Campaign",
     background: "bg-gradient-to-br from-purple-500 to-purple-700",
-    icon: "📣",
+    icon: "megaphone",
     isFavorite: false,
   },
   {
     id: "3",
     title: "Design System",
     background: "bg-gradient-to-br from-green-500 to-green-700",
-    icon: "🎨",
+    icon: "palette",
     isFavorite: true,
   },
   {
     id: "4",
     title: "Sprint Planning",
     background: "bg-gradient-to-br from-orange-500 to-orange-700",
-    icon: "⚡",
+    icon: "planning",
     isFavorite: false,
   },
   {
     id: "5",
     title: "Customer Feedback",
     background: "bg-gradient-to-br from-pink-500 to-pink-700",
-    icon: "💬",
+    icon: "communication",
     isFavorite: false,
   },
   {
     id: "6",
     title: "Team Resources",
     background: "bg-gradient-to-br from-teal-500 to-teal-700",
-    icon: "📚",
+    icon: "team",
     isFavorite: true,
   },
 ]
@@ -96,7 +97,7 @@ export function BoardStoreProvider({ children }: { children: ReactNode }) {
       id: input.id ?? Date.now().toString(),
       title: input.title,
       background: input.background,
-      icon: input.icon,
+      icon: input.icon || defaultBoardIconId,
       isFavorite: input.isFavorite ?? false,
       description: input.description,
       status: "active",

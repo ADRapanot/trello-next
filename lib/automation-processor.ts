@@ -101,17 +101,12 @@ function checkConditions(rule: AutomationRule, context: AutomationContext): bool
   return allPassed
 }
 
-const DEFAULT_USER = {
-  name: "🤖 Automation",
-  avatar: "🤖",
-}
-
 export function processAutomations(
   trigger: AutomationRule["trigger"],
   context: AutomationContext,
   rules: AutomationRule[],
   executeRuleCallback?: (ruleId: string) => void,
-  logActivityCallback?: (activity: Activity) => void
+  logActivityCallback?: (activity: Activity) => void,
 ): AutomationAction[] {
   const activeRules = rules.filter((rule) => rule.enabled && rule.type === "rule")
   const matchingRules = activeRules.filter((rule) => rule.trigger === trigger)
@@ -121,35 +116,44 @@ export function processAutomations(
   for (const rule of matchingRules) {
     if (checkConditions(rule, context)) {
       actionsToExecute.push(...rule.actions)
-      
-      // Log automation trigger activity
+
       if (logActivityCallback && context.card) {
         const actionsSummary = rule.actions
           .map((action) => {
             switch (action.type) {
-              case "move-card": return `move to list`
-              case "add-label": return `add label "${action.value}"`
-              case "remove-label": return `remove label "${action.value}"`
-              case "add-member": return `add member "${action.value}"`
-              case "remove-member": return `remove member "${action.value}"`
-              case "add-checklist": return `add checklist "${action.value}"`
-              case "archive-card": return `archive card`
-              case "mark-complete": return `mark as complete`
-              case "set-due-date": return `set due date`
-              default: return action.type
+              case "move-card":
+                return "move to list"
+              case "add-label":
+                return `add label "${action.value}"`
+              case "remove-label":
+                return `remove label "${action.value}"`
+              case "add-member":
+                return `add member "${action.value}"`
+              case "remove-member":
+                return `remove member "${action.value}"`
+              case "add-checklist":
+                return `add checklist "${action.value}"`
+              case "archive-card":
+                return "archive card"
+              case "mark-complete":
+                return "mark as complete"
+              case "set-due-date":
+                return "set due date"
+              default:
+                return action.type
             }
           })
           .join(", ")
-        
+
         const activity = ActivityHelpers.automationTriggered(
-          DEFAULT_USER,
+          { name: "🤖 Automation", avatar: "🤖" },
           rule.name,
           context.card.title,
-          actionsSummary
+          actionsSummary || "no actions",
         )
         logActivityCallback(activity)
       }
-      
+
       if (executeRuleCallback) {
         executeRuleCallback(rule.id)
       }

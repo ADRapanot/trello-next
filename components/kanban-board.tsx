@@ -5,7 +5,7 @@ import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { KanbanList } from "@/components/kanban-list"
 import { AddListForm } from "@/components/add-list-form"
-import type { Card, List } from "@/store/types"
+import type { Card, List, Activity } from "@/store/types"
 import { useKanbanStore } from "@/store/kanban-store"
 import { useAutomationTriggers } from "@/hooks/use-automation-triggers"
 
@@ -44,7 +44,7 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
   const lists = getLists(boardId)
   
   // Activity logging callback for automations
-  const logActivity = useCallback((activity: any) => {
+  const logActivity = useCallback((activity: Activity) => {
     addActivity(boardId, activity)
   }, [boardId, addActivity])
   
@@ -77,24 +77,30 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
     if (result.updatedCard || result.shouldMoveCard || result.shouldArchive) {
       setTimeout(() => {
         if (result.updatedCard) {
-          updateCard(boardId, listId, newCardId, result.updatedCard)
+          updateCard(boardId, listId, newCardId, result.updatedCard, { logActivity: false })
         }
         
         // Move card if automation requires it
         if (result.shouldMoveCard && result.targetListId) {
-          moveCard(boardId, newCardId, listId, result.targetListId, 0)
+          moveCard(boardId, newCardId, listId, result.targetListId, 0, { logActivity: false })
         }
         
         // Archive card if automation requires it
         if (result.shouldArchive) {
-          archiveCard(boardId, newCardId, result.targetListId || listId)
+          archiveCard(boardId, newCardId, result.targetListId || listId, { logActivity: false })
         }
       }, 100)
     }
   }
   
   // Wrapper for moveCard with automation support
-  const handleMoveCard = (cardId: string, fromListId: string, toListId: string, toIndex: number, shouldTriggerAutomation = true) => {
+  const handleMoveCard = (
+    cardId: string,
+    fromListId: string,
+    toListId: string,
+    toIndex: number,
+    shouldTriggerAutomation = true,
+  ) => {
     const currentLists = getLists(boardId)
     
     // Find the card in its CURRENT position (might have been moved by hover)
@@ -124,31 +130,34 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
     // Move the card first
     moveCard(boardId, cardId, actualFromListId, toListId, toIndex)
     
+    const automationFromListId = fromListId ?? actualFromListId
+    const movedBetweenLists = automationFromListId !== toListId || actualFromListId !== toListId
+    
     // Trigger automations ONLY if explicitly requested (on final drop, not during hover)
     // Use the ORIGINAL fromListId for automation logic (to detect list changes)
-    if (shouldTriggerAutomation && card && fromListId !== toListId) {
+    if (shouldTriggerAutomation && card && movedBetweenLists) {
       console.log('✅ TRIGGERING AUTOMATION for card move from', fromListId, 'to', toListId)
       setTimeout(() => {
         const result = triggerAutomations(
           "card-moved",
-          { card, fromListId, toListId, listId: toListId },
+          { card, fromListId: automationFromListId, toListId, listId: toListId },
           currentLists.map(l => l.id),
           availableMembers
         )
         
         // Apply automation actions
         if (result.updatedCard) {
-          updateCard(boardId, toListId, cardId, result.updatedCard)
+          updateCard(boardId, toListId, cardId, result.updatedCard, { logActivity: false })
         }
         
         // Move card again if automation requires it
         if (result.shouldMoveCard && result.targetListId && result.targetListId !== toListId) {
-          moveCard(boardId, cardId, toListId, result.targetListId, 0)
+          moveCard(boardId, cardId, toListId, result.targetListId, 0, { logActivity: false })
         }
         
         // Archive card if automation requires it
         if (result.shouldArchive) {
-          archiveCard(boardId, cardId, result.targetListId || toListId)
+          archiveCard(boardId, cardId, result.targetListId || toListId, { logActivity: false })
         }
       }, 50)
     } else if (shouldTriggerAutomation) {
@@ -252,17 +261,17 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
             
             // Apply automation actions
             if (result.updatedCard) {
-              updateCard(boardId, listId, cardId, result.updatedCard)
+              updateCard(boardId, listId, cardId, result.updatedCard, { logActivity: false })
             }
             
             // Move card if automation requires it
             if (result.shouldMoveCard && result.targetListId) {
-              moveCard(boardId, cardId, listId, result.targetListId, 0)
+              moveCard(boardId, cardId, listId, result.targetListId, 0, { logActivity: false })
             }
             
             // Archive card if automation requires it
             if (result.shouldArchive) {
-              archiveCard(boardId, cardId, result.targetListId || listId)
+              archiveCard(boardId, cardId, result.targetListId || listId, { logActivity: false })
             }
           }, 50)
         })

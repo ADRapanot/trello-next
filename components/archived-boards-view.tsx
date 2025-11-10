@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useBoardStore } from "@/store/boards-store"
 import { ArchiveRestore, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { getBoardIcon } from "@/lib/board-icons"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,14 +57,14 @@ export function ArchivedBoardsView({ open, onOpenChange }: ArchivedBoardsViewPro
                 <p>No archived boards</p>
               </div>
             ) : (
-              closedBoards.map((board) => (
+              closedBoards.map((board) => {
+                const IconComponent = getBoardIcon(board.icon)
+                return (
                 <Card key={board.id} className="p-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 flex-1">
-                      <div
-                        className={`w-12 h-12 rounded-lg ${board.background} flex items-center justify-center text-2xl`}
-                      >
-                        {board.icon}
+                      <div className={`w-12 h-12 rounded-lg ${board.background} flex items-center justify-center text-white`}>
+                        <IconComponent className="h-6 w-6" />
                       </div>
                       <div className="flex-1">
                         <h3 className="font-semibold">{board.title}</h3>
@@ -94,7 +95,7 @@ export function ArchivedBoardsView({ open, onOpenChange }: ArchivedBoardsViewPro
                     </div>
                   </div>
                 </Card>
-              ))
+              )})
             )}
           </div>
         </DialogContent>

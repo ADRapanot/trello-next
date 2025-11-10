@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { useMemo } from "react"
 import { useBoardStore } from "@/store/boards-store"
+import { getBoardIcon } from "@/lib/board-icons"
 
 interface SidebarProps {
   isOpen: boolean
@@ -20,14 +21,14 @@ export function Sidebar({ isOpen, currentBoard, onBoardSelect }: SidebarProps) {
     () => [
       {
         name: "Personal Workspace",
-        boards: boards.map((board) => ({ name: board.title, icon: board.icon || "📋" })),
+        boards: boards.map((board) => ({ name: board.title, iconId: board.icon || "kanban" })),
       },
       {
         name: "Team Workspace",
         boards: [
-          { name: "Q1 Goals", icon: "🎯" },
-          { name: "Bug Tracking", icon: "🐛" },
-          { name: "Feature Requests", icon: "💡" },
+          { name: "Q1 Goals", iconId: "target" },
+          { name: "Bug Tracking", iconId: "planning" },
+          { name: "Feature Requests", iconId: "lightbulb" },
         ],
       },
     ],
@@ -53,17 +54,20 @@ export function Sidebar({ isOpen, currentBoard, onBoardSelect }: SidebarProps) {
                   </div>
                 </div>
                 <div className="space-y-0.5 ml-2">
-                  {workspace.boards.map((board) => (
-                    <Button
-                      key={board.name}
-                      variant="ghost"
-                      className={cn("w-full justify-start gap-2 h-9", currentBoard === board.name && "bg-accent")}
-                      onClick={() => onBoardSelect(board.name)}
-                    >
-                      <span className="text-base">{board.icon}</span>
-                      <span className="text-sm">{board.name}</span>
-                    </Button>
-                  ))}
+                  {workspace.boards.map((board) => {
+                    const IconComponent = getBoardIcon(board.iconId)
+                    return (
+                      <Button
+                        key={board.name}
+                        variant="ghost"
+                        className={cn("w-full justify-start gap-2 h-9", currentBoard === board.name && "bg-accent")}
+                        onClick={() => onBoardSelect(board.name)}
+                      >
+                        <IconComponent className="h-4 w-4" />
+                        <span className="text-sm">{board.name}</span>
+                      </Button>
+                    )
+                  })}
                   <Button
                     variant="ghost"
                     className="w-full justify-start gap-2 h-9 text-muted-foreground hover:text-foreground"

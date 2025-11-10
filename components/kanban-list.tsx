@@ -211,7 +211,7 @@ export function KanbanList({
       } ${isDragging ? "opacity-50 scale-95" : "opacity-100 scale-100"}`}
     >
       <Card
-        className={`bg-gray-200 rounded-xl transition-all duration-200 py-0 ${
+        className={`rounded-xl transition-all duration-200 py-0 border border-white/20 bg-gradient-to-b from-white/80 via-white/70 to-white/60 backdrop-blur-sm shadow-sm dark:border-white/10 dark:from-slate-900/70 dark:via-slate-900/60 dark:to-slate-900/50 ${
           isOverList && canDropList 
             ? "ring-2 ring-primary shadow-lg scale-[1.02] border-primary" 
             : isOverCard && canDropCard
