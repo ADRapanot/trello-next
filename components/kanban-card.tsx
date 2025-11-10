@@ -5,7 +5,7 @@ import { useDrag, useDrop } from "react-dnd"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Clock, MessageSquare, Paperclip, MoreHorizontal } from "lucide-react"
+import { Clock, MessageSquare, Paperclip, MoreHorizontal, CheckSquare } from "lucide-react"
 import { CardDetailsModal } from "@/components/card-details-modal"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -29,7 +29,7 @@ interface KanbanCardProps {
   listId: string
   index: number
   boardId: string
-  onMoveCard: (cardId: string, fromListId: string, toListId: string, toIndex: number) => void
+  onMoveCard: (cardId: string, fromListId: string, toListId: string, toIndex: number, shouldTriggerAutomation?: boolean) => void
   onArchiveCard?: (cardId: string, listId: string) => void
   allLists?: { id: string; title: string }[]
   onUpdateCard?: (listId: string, cardId: string, updatedCard: any) => void
@@ -62,10 +62,37 @@ export function KanbanCard({
 
   const [{ isDragging }, drag, preview] = useDrag({
     type: "CARD",
-    item: { id: card.id, listId, index },
+    item: { 
+      id: card.id, 
+      listId, 
+      index,
+      originalListId: listId,  // Store original position for automation
+      originalIndex: index
+    },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
+    end: (item, monitor) => {
+      // When drag ends, check if we need to trigger automation
+      // This handles cases where drop handler didn't fire (dropping between cards)
+      const didDrop = monitor.didDrop()
+      console.log('🏁 Drag END:', {
+        cardId: item.id,
+        didDrop,
+        originalListId: item.originalListId,
+        currentListId: item.listId,
+        listChanged: item.originalListId !== item.listId
+      })
+      
+      // If no drop handler fired AND list changed, trigger automation manually
+      if (!didDrop && item.originalListId && item.listId && item.originalListId !== item.listId) {
+        console.log('🔥 Triggering automation from drag END (no drop handler fired)')
+        // Find current position
+        setTimeout(() => {
+          onMoveCard(item.id, item.originalListId!, item.listId, item.index || 0, true)
+        }, 10)
+      }
+    }
   })
 
   // Reset hover ref when dragging ends
@@ -77,7 +104,7 @@ export function KanbanCard({
     }
   }, [isDragging])
 
-  const handleHover = useCallback((item: { id: string; listId: string; index: number }, monitor: any) => {
+  const handleHover = useCallback((item: { id: string; listId: string; index: number; originalListId?: string; originalIndex?: number }, monitor: any) => {
     if (item.id === card.id) {
       draggedItemIdRef.current = null
       isMovingRef.current = false
@@ -106,7 +133,9 @@ export function KanbanCard({
     // Only move if the position actually changed
     lastHoveredItemRef.current = { id: item.id, listId, index }
     isMovingRef.current = true
-    onMoveCard(item.id, item.listId, listId, index)
+    // Move card for visual preview but DON'T trigger automation (false parameter)
+    onMoveCard(item.id, item.listId, listId, index, false)
+    // Update current position (but keep original position intact)
     item.listId = listId
     item.index = index
     
@@ -121,6 +150,23 @@ export function KanbanCard({
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: "CARD",
     hover: handleHover,
+    drop: (item: { id: string; listId: string; index: number; originalListId?: string; originalIndex?: number }, monitor) => {
+      // On actual drop, trigger automation using ORIGINAL position
+      // This ensures automations fire correctly even after hover moves
+      if (!monitor.didDrop() && item.id !== card.id) {
+        const fromListId = item.originalListId || item.listId
+        console.log('🎯 KanbanCard DROP:', {
+          cardId: item.id,
+          fromListId,
+          toListId: listId,
+          index,
+          originalListId: item.originalListId,
+          currentListId: item.listId,
+          shouldTriggerAutomation: true
+        })
+        onMoveCard(item.id, fromListId, listId, index, true)
+      }
+    },
     collect: (monitor) => {
       const item = monitor.getItem() as { id: string } | null
       const isDraggedCard = item?.id === card.id
@@ -165,12 +211,12 @@ export function KanbanCard({
           const dropRef = drop(node)
           drag(dropRef || node)
         }} 
-        className="relative group"
+        className="relative group kanban-card-wrapper"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
         <Card
-          className={`p-2.5 cursor-pointer hover:bg-accent/50 transition-all duration-200 bg-white dark:bg-card ${
+          className={`kanban-card p-2.5 cursor-pointer hover:bg-accent/50 transition-all duration-200 bg-white dark:bg-card ${
             isDragging ? "opacity-30 scale-95 rotate-2" : "opacity-100 scale-100"
           } ${isOver && canDrop ? "ring-2 ring-primary ring-offset-2" : ""}`}
           onClick={handleCardClick}
@@ -228,12 +274,12 @@ export function KanbanCard({
                 w-4 h-4 rounded-full border-2 transition-all duration-300 ease-in-out
                 flex items-center justify-center flex-shrink-0
                 ${isComplete 
-                  ? 'opacity-100 translate-x-0 bg-primary border-primary' 
+                  ? 'opacity-100 translate-x-0 bg-green-500 border-green-500' 
                   : isHovered
-                    ? 'opacity-100 translate-x-0 bg-transparent border-muted-foreground/40 hover:border-primary'
+                    ? 'opacity-100 translate-x-0 bg-transparent border-muted-foreground/40 hover:border-green-500'
                     : 'opacity-0 -translate-x-4 bg-transparent border-muted-foreground/40'
                 }
-                focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+                focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2
                 cursor-pointer z-10
               `}
               aria-label={isComplete ? "Mark as incomplete" : "Mark as complete"}
@@ -264,9 +310,7 @@ export function KanbanCard({
             {/* Due date */}
             {card.dueDate && (() => {
               const dueDateTime = new Date(card.dueDate)
-              const hasTime = dueDateTime.getHours() !== 0 || dueDateTime.getMinutes() !== 0
               const dateStr = dueDateTime.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-              const timeStr = hasTime ? dueDateTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }) : null
               
               return (
                 <Badge
@@ -280,7 +324,7 @@ export function KanbanCard({
                   }`}
                 >
                   <Clock className="h-3 w-3" />
-                  {dateStr}{timeStr ? ` ${timeStr}` : ''}
+                  {dateStr}
                 </Badge>
               )
             })()}
@@ -290,6 +334,18 @@ export function KanbanCard({
               <Badge variant="outline" className="gap-1">
                 <Paperclip className="h-3 w-3" />
                 {card.attachments?.length}
+              </Badge>
+            )}
+
+            {/* Checklist */}
+            {card.checklist && card.checklist.total > 0 && (
+              <Badge variant="outline" className={`gap-1 ${
+                card.checklist.completed === card.checklist.total 
+                  ? "bg-green-100 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-400"
+                  : ""
+              }`}>
+                <CheckSquare className="h-3 w-3" />
+                {card.checklist.completed}/{card.checklist.total}
               </Badge>
             )}
 

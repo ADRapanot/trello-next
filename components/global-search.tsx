@@ -234,7 +234,7 @@ export function GlobalSearch() {
         </PopoverTrigger>
 
         <PopoverContent
-          className="w-[600px] p-0"
+          className="w-[400px] p-0"
           align="start"
           side="bottom"
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -270,9 +270,9 @@ export function GlobalSearch() {
                           </div>
                         </div>
                         {result.members && result.members.length > 0 && (
-                          <div className="flex -space-x-2">
+                          <div className="flex gap-1">
                             {result.members.slice(0, 3).map((member) => (
-                              <Avatar key={member.id} className="h-6 w-6 border-2 border-background">
+                              <Avatar key={member.id} className="h-6 w-6 border-0 border-background">
                                 <AvatarFallback className="text-xs bg-primary text-primary-foreground">
                                   {member.avatar}
                                 </AvatarFallback>

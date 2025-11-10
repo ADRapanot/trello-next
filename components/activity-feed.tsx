@@ -23,6 +23,16 @@ import {
   Filter,
   Archive,
   Copy,
+  Plus,
+  Edit,
+  Trash2,
+  RotateCcw,
+  FileText,
+  List,
+  Move,
+  Zap,
+  Power,
+  PowerOff,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 
@@ -42,85 +52,229 @@ const activityConfig: Record<
     getDescription: (activity: Activity) => string
   }
 > = {
+  // Card actions
+  card_created: {
+    icon: Plus,
+    color: "text-green-500",
+    getDescription: (activity) => `created card "${activity.details.itemName}" in list "${activity.details.to}"`,
+  },
   card_moved: {
     icon: ArrowRight,
     color: "text-blue-500",
-    getDescription: (activity) => `moved this card from ${activity.details.from} to ${activity.details.to}`,
+    getDescription: (activity) => `moved card "${activity.details.itemName}" from ${activity.details.from} to ${activity.details.to}`,
   },
-  label_added: {
-    icon: Tag,
-    color: "text-green-500",
-    getDescription: (activity) => `added the ${activity.details.itemName} label`,
-  },
-  label_removed: {
-    icon: Tag,
-    color: "text-red-500",
-    getDescription: (activity) => `removed the ${activity.details.itemName} label`,
-  },
-  member_added: {
-    icon: User,
-    color: "text-purple-500",
-    getDescription: (activity) => `added ${activity.details.itemName} to this card`,
-  },
-  member_removed: {
-    icon: User,
-    color: "text-orange-500",
-    getDescription: (activity) => `removed ${activity.details.itemName} from this card`,
-  },
-  attachment_added: {
-    icon: Paperclip,
-    color: "text-teal-500",
-    getDescription: (activity) => `attached ${activity.details.itemName}`,
-  },
-  attachment_removed: {
-    icon: Paperclip,
-    color: "text-red-500",
-    getDescription: (activity) => `deleted the ${activity.details.itemName} attachment`,
-  },
-  checklist_added: {
-    icon: CheckSquare,
-    color: "text-indigo-500",
-    getDescription: (activity) => `added ${activity.details.itemName} checklist`,
-  },
-  checklist_item_completed: {
-    icon: CheckSquare,
-    color: "text-green-500",
-    getDescription: (activity) => `completed ${activity.details.itemName}`,
-  },
-  checklist_item_uncompleted: {
-    icon: CheckSquare,
-    color: "text-gray-500",
-    getDescription: (activity) => `marked ${activity.details.itemName} as incomplete`,
-  },
-  comment_added: {
-    icon: MessageSquare,
+  card_updated: {
+    icon: Edit,
     color: "text-blue-500",
-    getDescription: () => `added a comment`,
+    getDescription: (activity) => `updated card "${activity.details.itemName}"`,
   },
-  due_date_added: {
-    icon: CalendarIcon,
-    color: "text-green-500",
-    getDescription: (activity) => `set due date to ${activity.details.to}`,
-  },
-  due_date_changed: {
-    icon: Clock,
-    color: "text-yellow-500",
-    getDescription: (activity) => `changed due date from ${activity.details.from} to ${activity.details.to}`,
-  },
-  due_date_removed: {
-    icon: CalendarIcon,
-    color: "text-red-500",
-    getDescription: () => `removed the due date`,
+  card_renamed: {
+    icon: Edit,
+    color: "text-blue-500",
+    getDescription: (activity) => `renamed card from "${activity.details.from}" to "${activity.details.to}"`,
   },
   card_archived: {
     icon: Archive,
     color: "text-gray-500",
-    getDescription: () => `archived this card`,
+    getDescription: (activity) => `archived card "${activity.details.itemName}"`,
+  },
+  card_restored: {
+    icon: RotateCcw,
+    color: "text-green-500",
+    getDescription: (activity) => `restored card "${activity.details.itemName}" to list "${activity.details.to}"`,
+  },
+  card_deleted: {
+    icon: Trash2,
+    color: "text-red-500",
+    getDescription: (activity) => `permanently deleted card "${activity.details.itemName}"`,
   },
   card_copied: {
     icon: Copy,
     color: "text-blue-500",
-    getDescription: (activity) => `copied this card to ${activity.details.to}`,
+    getDescription: (activity) => `copied card from "${activity.details.from}" to "${activity.details.to}"`,
+  },
+  card_description_changed: {
+    icon: FileText,
+    color: "text-blue-500",
+    getDescription: (activity) => `updated description of card "${activity.details.itemName}"`,
+  },
+  // List actions
+  list_created: {
+    icon: Plus,
+    color: "text-green-500",
+    getDescription: (activity) => `created list "${activity.details.itemName}"`,
+  },
+  list_renamed: {
+    icon: Edit,
+    color: "text-blue-500",
+    getDescription: (activity) => `renamed list from "${activity.details.from}" to "${activity.details.to}"`,
+  },
+  list_moved: {
+    icon: Move,
+    color: "text-blue-500",
+    getDescription: (activity) => `moved list "${activity.details.itemName}" to ${activity.details.to}`,
+  },
+  list_copied: {
+    icon: Copy,
+    color: "text-blue-500",
+    getDescription: (activity) => `copied list "${activity.details.from}" to "${activity.details.to}"`,
+  },
+  list_archived: {
+    icon: Archive,
+    color: "text-gray-500",
+    getDescription: (activity) => `archived list "${activity.details.itemName}" with ${activity.details.to}`,
+  },
+  cards_moved_all: {
+    icon: ArrowRight,
+    color: "text-blue-500",
+    getDescription: (activity) => `moved all ${activity.details.itemName} from "${activity.details.from}" to "${activity.details.to}"`,
+  },
+  // Label actions
+  label_added: {
+    icon: Tag,
+    color: "text-green-500",
+    getDescription: (activity) => `added label "${activity.details.itemName}" to card "${activity.details.to}"`,
+  },
+  label_removed: {
+    icon: Tag,
+    color: "text-red-500",
+    getDescription: (activity) => `removed label "${activity.details.itemName}" from card "${activity.details.from}"`,
+  },
+  label_renamed: {
+    icon: Tag,
+    color: "text-blue-500",
+    getDescription: (activity) => `renamed label from "${activity.details.from}" to "${activity.details.to}"`,
+  },
+  label_deleted: {
+    icon: Trash2,
+    color: "text-red-500",
+    getDescription: (activity) => `deleted label "${activity.details.itemName}"`,
+  },
+  // Member actions
+  member_added: {
+    icon: User,
+    color: "text-purple-500",
+    getDescription: (activity) => `added member "${activity.details.itemName}" to card "${activity.details.to}"`,
+  },
+  member_removed: {
+    icon: User,
+    color: "text-orange-500",
+    getDescription: (activity) => `removed member "${activity.details.itemName}" from card "${activity.details.from}"`,
+  },
+  // Attachment actions
+  attachment_added: {
+    icon: Paperclip,
+    color: "text-teal-500",
+    getDescription: (activity) => `added attachment "${activity.details.itemName}" to card "${activity.details.to}"`,
+  },
+  attachment_removed: {
+    icon: Paperclip,
+    color: "text-red-500",
+    getDescription: (activity) => `removed attachment "${activity.details.itemName}" from card "${activity.details.from}"`,
+  },
+  // Checklist actions
+  checklist_added: {
+    icon: CheckSquare,
+    color: "text-indigo-500",
+    getDescription: (activity) => `added checklist "${activity.details.itemName}" to card "${activity.details.to}"`,
+  },
+  checklist_removed: {
+    icon: CheckSquare,
+    color: "text-red-500",
+    getDescription: (activity) => `removed checklist "${activity.details.itemName}" from card "${activity.details.from}"`,
+  },
+  checklist_item_added: {
+    icon: Plus,
+    color: "text-green-500",
+    getDescription: (activity) => `added checklist item "${activity.details.itemName}"`,
+  },
+  checklist_item_completed: {
+    icon: CheckSquare,
+    color: "text-green-500",
+    getDescription: (activity) => `completed checklist item "${activity.details.itemName}" in card "${activity.details.to}"`,
+  },
+  checklist_item_uncompleted: {
+    icon: CheckSquare,
+    color: "text-gray-500",
+    getDescription: (activity) => `marked checklist item "${activity.details.itemName}" as incomplete in card "${activity.details.to}"`,
+  },
+  checklist_item_deleted: {
+    icon: Trash2,
+    color: "text-red-500",
+    getDescription: (activity) => `deleted checklist item "${activity.details.itemName}"`,
+  },
+  // Comment actions
+  comment_added: {
+    icon: MessageSquare,
+    color: "text-blue-500",
+    getDescription: (activity) => `added comment to card "${activity.details.to}"`,
+  },
+  comment_edited: {
+    icon: Edit,
+    color: "text-blue-500",
+    getDescription: (activity) => `edited a comment`,
+  },
+  comment_deleted: {
+    icon: Trash2,
+    color: "text-red-500",
+    getDescription: (activity) => `deleted a comment`,
+  },
+  // Date actions
+  due_date_added: {
+    icon: CalendarIcon,
+    color: "text-green-500",
+    getDescription: (activity) => `set due date for card "${activity.details.itemName}" to ${activity.details.to}`,
+  },
+  due_date_changed: {
+    icon: Clock,
+    color: "text-yellow-500",
+    getDescription: (activity) => `changed due date for card "${activity.details.itemName}" from ${activity.details.from} to ${activity.details.to}`,
+  },
+  due_date_removed: {
+    icon: CalendarIcon,
+    color: "text-red-500",
+    getDescription: (activity) => `removed due date from card "${activity.details.itemName}"`,
+  },
+  start_date_added: {
+    icon: CalendarIcon,
+    color: "text-green-500",
+    getDescription: (activity) => `set start date for card "${activity.details.itemName}" to ${activity.details.to}`,
+  },
+  start_date_changed: {
+    icon: Clock,
+    color: "text-yellow-500",
+    getDescription: (activity) => `changed start date for card "${activity.details.itemName}" from ${activity.details.from} to ${activity.details.to}`,
+  },
+  start_date_removed: {
+    icon: CalendarIcon,
+    color: "text-red-500",
+    getDescription: (activity) => `removed start date from card "${activity.details.itemName}"`,
+  },
+  // Automation actions
+  automation_triggered: {
+    icon: Zap,
+    color: "text-yellow-500",
+    getDescription: (activity) => `automation "${activity.details.itemName}" triggered for card "${activity.details.to}" - ${activity.details.from}`,
+  },
+  automation_rule_created: {
+    icon: Plus,
+    color: "text-green-500",
+    getDescription: (activity) => `created automation rule "${activity.details.itemName}"`,
+  },
+  automation_rule_enabled: {
+    icon: Power,
+    color: "text-green-500",
+    getDescription: (activity) => `enabled automation rule "${activity.details.itemName}"`,
+  },
+  automation_rule_disabled: {
+    icon: PowerOff,
+    color: "text-gray-500",
+    getDescription: (activity) => `disabled automation rule "${activity.details.itemName}"`,
+  },
+  automation_rule_deleted: {
+    icon: Trash2,
+    color: "text-red-500",
+    getDescription: (activity) => `deleted automation rule "${activity.details.itemName}"`,
   },
 }
 
@@ -192,13 +346,42 @@ export function ActivityFeed({ boardId, activities: activitiesProp }: ActivityFe
 
   const filterOptions: { label: string; types: ActivityType[] }[] = [
     { label: "All", types: [] },
-    { label: "Comments", types: ["comment_added"] },
-    { label: "Members", types: ["member_added", "member_removed"] },
-    { label: "Labels", types: ["label_added", "label_removed"] },
-    { label: "Attachments", types: ["attachment_added", "attachment_removed"] },
-    { label: "Checklists", types: ["checklist_added", "checklist_item_completed", "checklist_item_uncompleted"] },
-    { label: "Dates", types: ["due_date_added", "due_date_changed", "due_date_removed"] },
-    { label: "Card Actions", types: ["card_moved", "card_archived", "card_copied"] },
+    { 
+      label: "Card Actions", 
+      types: ["card_created", "card_moved", "card_updated", "card_renamed", "card_archived", "card_restored", "card_deleted", "card_copied", "card_description_changed"] 
+    },
+    { 
+      label: "List Actions", 
+      types: ["list_created", "list_renamed", "list_moved", "list_copied", "list_archived", "cards_moved_all"] 
+    },
+    { 
+      label: "Labels", 
+      types: ["label_added", "label_removed", "label_renamed", "label_deleted"] 
+    },
+    { 
+      label: "Members", 
+      types: ["member_added", "member_removed"] 
+    },
+    { 
+      label: "Attachments", 
+      types: ["attachment_added", "attachment_removed"] 
+    },
+    { 
+      label: "Checklists", 
+      types: ["checklist_added", "checklist_removed", "checklist_item_added", "checklist_item_completed", "checklist_item_uncompleted", "checklist_item_deleted"] 
+    },
+    { 
+      label: "Comments", 
+      types: ["comment_added", "comment_edited", "comment_deleted"] 
+    },
+    { 
+      label: "Dates", 
+      types: ["due_date_added", "due_date_changed", "due_date_removed", "start_date_added", "start_date_changed", "start_date_removed"] 
+    },
+    { 
+      label: "Automations", 
+      types: ["automation_triggered", "automation_rule_created", "automation_rule_enabled", "automation_rule_disabled", "automation_rule_deleted"] 
+    },
   ]
 
   const filteredActivities =

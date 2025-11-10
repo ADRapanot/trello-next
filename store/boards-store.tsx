@@ -10,6 +10,8 @@ export interface Board {
   icon: string
   isFavorite: boolean
   description?: string
+  status?: "active" | "closed"
+  workspace?: string
 }
 
 export interface AddBoardInput {
@@ -27,7 +29,11 @@ interface BoardStoreValue {
   toggleFavorite: (id: string) => void
   updateBoard: (id: string, updates: Partial<Omit<Board, "id">>) => void
   removeBoard: (id: string) => void
+  closeBoard: (id: string) => void
+  reopenBoard: (id: string) => void
   getBoardById: (id?: string) => Board | undefined
+  getActiveBoards: () => Board[]
+  getClosedBoards: () => Board[]
   setBoards: (updater: (prevBoards: Board[]) => Board[]) => void
 }
 
@@ -92,6 +98,9 @@ export function BoardStoreProvider({ children }: { children: ReactNode }) {
       background: input.background,
       icon: input.icon,
       isFavorite: input.isFavorite ?? false,
+      description: input.description,
+      status: "active",
+      workspace: "My Workspace",
     }
 
     setBoardsState((prev) => [...prev, newBoard])
@@ -110,6 +119,22 @@ export function BoardStoreProvider({ children }: { children: ReactNode }) {
     setBoardsState((prev) => prev.filter((board) => board.id !== id))
   }, [])
 
+  const closeBoard = useCallback((id: string) => {
+    setBoardsState((prev) => prev.map((board) => (board.id === id ? { ...board, status: "closed" as const } : board)))
+  }, [])
+
+  const reopenBoard = useCallback((id: string) => {
+    setBoardsState((prev) => prev.map((board) => (board.id === id ? { ...board, status: "active" as const } : board)))
+  }, [])
+
+  const getActiveBoards = useCallback(() => {
+    return boards.filter((board) => board.status !== "closed")
+  }, [boards])
+
+  const getClosedBoards = useCallback(() => {
+    return boards.filter((board) => board.status === "closed")
+  }, [boards])
+
   const getBoardById = useCallback(
     (id?: string) => {
       if (!id) return undefined
@@ -119,8 +144,20 @@ export function BoardStoreProvider({ children }: { children: ReactNode }) {
   )
 
   const value = useMemo(
-    () => ({ boards, addBoard, toggleFavorite, updateBoard, removeBoard, getBoardById, setBoards }),
-    [boards, addBoard, toggleFavorite, updateBoard, removeBoard, getBoardById, setBoards],
+    () => ({
+      boards,
+      addBoard,
+      toggleFavorite,
+      updateBoard,
+      removeBoard,
+      closeBoard,
+      reopenBoard,
+      getBoardById,
+      getActiveBoards,
+      getClosedBoards,
+      setBoards,
+    }),
+    [boards, addBoard, toggleFavorite, updateBoard, removeBoard, closeBoard, reopenBoard, getBoardById, getActiveBoards, getClosedBoards, setBoards],
   )
 
   return <BoardStoreContext.Provider value={value}>{children}</BoardStoreContext.Provider>

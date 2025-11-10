@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -127,10 +127,36 @@ export function CardDetailsModal({
   const [checklists, setChecklists] = useState<Checklist[]>(card.checklists || [])
   const [comments, setComments] = useState<Comment[]>(card.comments || [])
   const [attachments, setAttachments] = useState<Attachment[]>(card.attachments || [])
+  const [isComplete, setIsComplete] = useState(card.isComplete || false)
 
   const [showMembersPopover, setShowMembersPopover] = useState(false)
   const [showLabelsPopover, setShowLabelsPopover] = useState(false)
   const [showDatePopover, setShowDatePopover] = useState(false)
+
+  // Track original dates when date popover opens
+  const originalDatesRef = useRef<{
+    startDate: string | undefined
+    dueDate: string | undefined
+    enableStartDate: boolean
+  }>({
+    startDate: undefined,
+    dueDate: undefined,
+    enableStartDate: false,
+  })
+
+  // Track original values to detect changes
+  const originalCardRef = useRef({
+    title: card.title,
+    description: card.description,
+    labels: JSON.stringify(card.labels || []),
+    members: JSON.stringify(card.members || []),
+    startDate: card.startDate,
+    dueDate: card.dueDate,
+    checklists: JSON.stringify(card.checklists || []),
+    comments: JSON.stringify(card.comments || []),
+    attachments: JSON.stringify(card.attachments || []),
+    isComplete: card.isComplete || false,
+  })
 
   const commitUpdate = useCallback(
     (updates: Partial<Card>) => {
@@ -180,6 +206,50 @@ export function CardDetailsModal({
   useEffect(() => {
     setChecklists(card.checklists || [])
   }, [card.checklists])
+
+  useEffect(() => {
+    setIsComplete(card.isComplete || false)
+  }, [card.isComplete])
+
+  // Update original values when modal opens with a new card
+  useEffect(() => {
+    if (isOpen) {
+      originalCardRef.current = {
+        title: card.title,
+        description: card.description,
+        labels: JSON.stringify(card.labels || []),
+        members: JSON.stringify(card.members || []),
+        startDate: card.startDate,
+        dueDate: card.dueDate,
+        checklists: JSON.stringify(card.checklists || []),
+        comments: JSON.stringify(card.comments || []),
+        attachments: JSON.stringify(card.attachments || []),
+        isComplete: card.isComplete || false,
+      }
+      console.log('📋 Modal opened - saved original values for comparison')
+    }
+  }, [isOpen, card])
+
+  // Track previous showDatePopover state to detect when it opens
+  const prevShowDatePopover = useRef(false)
+
+  // Capture original dates ONLY when date popover transitions to open
+  useEffect(() => {
+    if (showDatePopover && !prevShowDatePopover.current) {
+      // Popover just opened, capture the current state
+      originalDatesRef.current = {
+        startDate: tempStartDate?.toISOString(),
+        dueDate: tempDueDate?.toISOString(),
+        enableStartDate: enableStartDate,
+      }
+      console.log('📅 Date popover opened - captured initial dates:', {
+        startDate: tempStartDate?.toISOString(),
+        dueDate: tempDueDate?.toISOString(),
+        enableStartDate: enableStartDate,
+      })
+    }
+    prevShowDatePopover.current = showDatePopover
+  }, [showDatePopover, tempStartDate, tempDueDate, enableStartDate])
 
   // Memoize date values to ensure stable dependencies
   const cardStartDate = useMemo(() => card.startDate ?? undefined, [card.startDate])
@@ -299,6 +369,10 @@ export function CardDetailsModal({
     )
   }
 
+  const deleteChecklist = (checklistId: string) => {
+    updateChecklists((prev) => prev.filter((checklist) => checklist.id !== checklistId))
+  }
+
   const addChecklist = () => {
     if (newChecklistTitle.trim()) {
       const newChecklist: Checklist = {
@@ -368,19 +442,89 @@ export function CardDetailsModal({
   )
   const totalItems = checklists.reduce((sum, checklist) => sum + checklist.items.length, 0)
 
-  const handleClose = () => {
-    commitUpdate({
-      title,
-      description,
-      labels: Array.from(new Set(selectedLabels)),
-      members: selectedMembers,
-      startDate: startDate ? startDate.toISOString() : undefined,
-      dueDate: dueDate ? dueDate.toISOString() : undefined,
-      attachments,
-      comments,
-      checklists,
-      checklist: computeChecklistSummary(checklists),
+  // Check if dates have changed from original values
+  const datesHaveChanged = useMemo(() => {
+    // If date popover isn't open, no changes
+    if (!showDatePopover) {
+      return false
+    }
+    
+    const newStartDate = tempStartDate?.toISOString()
+    const newDueDate = tempDueDate?.toISOString()
+    
+    const startChanged = newStartDate !== originalDatesRef.current.startDate
+    const dueChanged = newDueDate !== originalDatesRef.current.dueDate
+    const enableChanged = enableStartDate !== originalDatesRef.current.enableStartDate
+    
+    const hasChanges = startChanged || dueChanged || enableChanged
+    
+    console.log('🔍 Checking date changes:', {
+      popoverOpen: showDatePopover,
+      newStartDate,
+      originalStartDate: originalDatesRef.current.startDate,
+      startChanged,
+      newDueDate,
+      originalDueDate: originalDatesRef.current.dueDate,
+      dueChanged,
+      enableStartDate,
+      originalEnableStartDate: originalDatesRef.current.enableStartDate,
+      enableChanged,
+      hasChanges
     })
+    
+    return hasChanges
+  }, [showDatePopover, enableStartDate, tempStartDate, tempDueDate])
+
+  const handleClose = () => {
+    // Check if anything has actually changed from the original values
+    const updates: Partial<Card> = {}
+    
+    // Normalize for comparison (treat undefined, null, and empty string as equivalent)
+    const normalizeString = (str: string | undefined | null) => str || ''
+    
+    // Normalize dates for comparison (handle undefined/null)
+    const normalizeDate = (date: Date | undefined) => {
+      if (!date) return undefined
+      return date.toISOString()
+    }
+    
+    // Compare current values with originals
+    const hasChanges = {
+      title: normalizeString(title) !== normalizeString(originalCardRef.current.title),
+      description: normalizeString(description) !== normalizeString(originalCardRef.current.description),
+      labels: JSON.stringify(selectedLabels) !== originalCardRef.current.labels,
+      members: JSON.stringify(selectedMembers) !== originalCardRef.current.members,
+      startDate: normalizeDate(startDate) !== originalCardRef.current.startDate,
+      dueDate: normalizeDate(dueDate) !== originalCardRef.current.dueDate,
+      checklists: JSON.stringify(checklists) !== originalCardRef.current.checklists,
+      comments: JSON.stringify(comments) !== originalCardRef.current.comments,
+      attachments: JSON.stringify(attachments) !== originalCardRef.current.attachments,
+      isComplete: isComplete !== originalCardRef.current.isComplete,
+    }
+    
+    const changedFields = Object.entries(hasChanges)
+      .filter(([_, changed]) => changed)
+      .map(([field]) => field)
+    
+    console.log('🚪 Modal closing - changed fields:', changedFields.length > 0 ? changedFields : 'NONE')
+    
+    // Only add changed fields to updates
+    if (hasChanges.title) {
+      updates.title = title
+    }
+    
+    if (hasChanges.description) {
+      updates.description = description
+    }
+    
+    // Only commit if there are actual changes
+    if (Object.keys(updates).length > 0) {
+      console.log('💾 Committing updates on close:', updates)
+      commitUpdate(updates)
+    } else {
+      console.log('✅ No changes detected - NO AUTOMATION WILL TRIGGER')
+    }
+    
     onClose()
   }
 
@@ -391,8 +535,24 @@ export function CardDetailsModal({
           className="w-[90vw] !max-w-[90vw] max-h-[90vh] overflow-hidden p-0 [&>button]:hidden"
         >
           <DialogTitle className="sr-only">{card.title}</DialogTitle>
-          <div className="sticky top-0 z-50 bg-background px-6 py-3 border-b flex items-center justify-end">
-            <div className="flex items-center gap-1">
+          <div className="sticky top-0 z-50 bg-background px-6 py-3 border-b flex items-center justify-between gap-4">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <Checkbox 
+                checked={isComplete}
+                onCheckedChange={(checked) => {
+                  const newState = checked === true
+                  setIsComplete(newState)
+                  commitUpdate({ isComplete: newState })
+                }}
+                className="mt-2 h-5 w-5 rounded-full data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500" 
+              />
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="!text-2xl !font-bold border-none px-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 flex-1"
+              />
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -422,15 +582,6 @@ export function CardDetailsModal({
 
           <div className="flex overflow-hidden h-[calc(90vh-64px)]">
             <div className="w-1/2 overflow-y-auto px-6 py-4 space-y-6 relative">
-              <div className="flex items-start gap-3">
-                <Checkbox className="mt-2 h-5 w-5 rounded-full" />
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="!text-3xl !font-bold border-none px-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0"
-                />
-              </div>
-
               <div>
                 <h3 className="text-xs font-semibold text-muted-foreground mb-2">ADD TO CARD</h3>
                 <div className="flex flex-wrap gap-2">
@@ -721,6 +872,7 @@ export function CardDetailsModal({
                             }}
                             className="flex-1"
                             size="sm"
+                            disabled={!datesHaveChanged}
                           >
                             Save
                           </Button>

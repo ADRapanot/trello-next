@@ -1,6 +1,7 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Analytics } from "@vercel/analytics/next"
+import { Toaster } from "sonner"
 import "./globals.css"
 import { AppStoreProvider } from "@/store/app-store"
 
@@ -16,9 +17,10 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`font-sans antialiased h-screen flex flex-col`}>
         <AppStoreProvider>{children}</AppStoreProvider>
+        <Toaster position="top-right" richColors duration={2000} />
         <Analytics />
       </body>
     </html>

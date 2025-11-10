@@ -15,7 +15,8 @@ import { useRouter } from "next/navigation"
 export function LeftSidebar() {
   const [selectedMembers, setSelectedMembers] = useState<Member[]>([])
   const [selectedLabels, setSelectedLabels] = useState<string[]>([])
-  const { boards, addBoard, updateBoard } = useBoardStore()
+  const { getActiveBoards, addBoard, updateBoard } = useBoardStore()
+  const activeBoards = getActiveBoards()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingBoard, setEditingBoard] = useState<Board | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -37,7 +38,7 @@ export function LeftSidebar() {
               Boards
             </h3>
             <div className="space-y-1">
-              {boards.map((board) => (
+              {activeBoards.map((board) => (
                 <div
                   key={board.id}
                   onDoubleClick={(e) => {

@@ -248,4 +248,30 @@
     background-color: var(--primary);
   }
 
+  /* Adjust Kanban card sizing */
+  .kanban-card-wrapper {
+    margin: 0 auto;
+  }
+
+  .kanban-card {
+    font-size: 0.9rem;
+    padding: 0.5rem !important;
+  }
+
+  .kanban-card .text-sm {
+    font-size: 0.8rem !important;
+  }
+
+  .kanban-card .text-xs {
+    font-size: 0.65rem !important;
+  }
+
+  .kanban-card .h-6 {
+    height: 1.2rem !important;
+  }
+
+  .kanban-card .w-6 {
+    width: 1.2rem !important;
+  }
+
 }

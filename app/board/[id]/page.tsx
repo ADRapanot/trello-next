@@ -8,11 +8,22 @@ import { BoardNavbar } from "@/components/board-navbar"
 import { KanbanBoard, type FilterState } from "@/components/kanban-board"
 import { LeftSidebar } from "@/components/left-sidebar"
 import { useBoardStore } from "@/store/boards-store"
+import { useKanbanStore } from "@/store/kanban-store"
+import { useAutomationStore } from "@/store/automation-store"
 
 type BoardMember = { id: string; name: string; avatar: string }
 
 export default function BoardPage() {
   const params = useParams<{ id: string }>()
+  const { addActivity } = useKanbanStore()
+  const setActivityLogger = useAutomationStore((state) => state.setActivityLogger)
+  
+  // Initialize automation store activity logger
+  useEffect(() => {
+    setActivityLogger((boardId, activity) => {
+      addActivity(boardId, activity)
+    })
+  }, [setActivityLogger, addActivity])
   const boardId = params?.id
   const { getBoardById, updateBoard } = useBoardStore()
   const board = getBoardById(boardId)

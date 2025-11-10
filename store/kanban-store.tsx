@@ -4,6 +4,13 @@ import { createContext, useCallback, useContext, useMemo, useState } from "react
 import type { ReactNode } from "react"
 
 import type { Activity, Card, List } from "@/store/types"
+import { ActivityHelpers } from "@/lib/activity-helpers"
+
+// Default user for activity logging (can be replaced with real user context later)
+const DEFAULT_USER = {
+  name: "John Doe",
+  avatar: "JD",
+}
 
 interface ArchivedCardInfo {
   cardId: string
@@ -25,8 +32,9 @@ interface KanbanStoreValue {
   getLabels: (boardId: string) => string[]
   getActivities: (boardId: string) => Activity[]
   addList: (boardId: string, title: string) => void
-  addCard: (boardId: string, listId: string, title: string) => void
+  addCard: (boardId: string, listId: string, title: string) => string
   moveCard: (boardId: string, cardId: string, fromListId: string, toListId: string, toIndex: number) => void
+  moveAllCards: (boardId: string, fromListId: string, toListId: string) => void
   moveList: (boardId: string, listId: string, toIndex: number) => void
   archiveCard: (boardId: string, cardId: string, listId: string) => void
   archiveList: (boardId: string, listId: string) => void
@@ -278,9 +286,11 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
       if (!boardId) return
       setBoardState(boardId, (current) => {
         const lists = [...current.lists, { id: Date.now().toString(), title, cards: [] }]
+        const activity = ActivityHelpers.listCreated(DEFAULT_USER, title)
         return {
           ...current,
           lists,
+          activities: [activity, ...current.activities],
         }
       })
     },
@@ -288,19 +298,23 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
   )
 
   const addCard = useCallback(
-    (boardId: string, listId: string, title: string) => {
-      if (!boardId) return
+    (boardId: string, listId: string, title: string): string => {
+      if (!boardId) return ""
+      const newCardId = Date.now().toString()
       setBoardState(boardId, (current) => {
         const lists = cloneLists(current.lists)
         const list = lists.find((l) => l.id === listId)
         if (!list) return current
-        list.cards.push({ id: Date.now().toString(), title, attachments: [], comments: [], checklists: [] })
+        list.cards.push({ id: newCardId, title, attachments: [], comments: [], checklists: [] })
+        const activity = ActivityHelpers.cardCreated(DEFAULT_USER, title, list.title)
         return {
           ...current,
           lists,
           labels: computeLabels(lists),
+          activities: [activity, ...current.activities],
         }
       })
+      return newCardId
     },
     [setBoardState],
   )
@@ -323,6 +337,43 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
 
         const [card] = fromList.cards.splice(cardIndex, 1)
         toList.cards.splice(toIndex, 0, card)
+
+        // Only log activity if moving between different lists
+        const activities = fromListId !== toListId
+          ? [ActivityHelpers.cardMoved(DEFAULT_USER, card.title, fromList.title, toList.title), ...current.activities]
+          : current.activities
+
+        return {
+          ...current,
+          lists,
+          activities,
+        }
+      })
+    },
+    [setBoardState],
+  )
+
+  const moveAllCards = useCallback(
+    (boardId: string, fromListId: string, toListId: string) => {
+      if (!boardId || fromListId === toListId) return
+      setBoardState(boardId, (current) => {
+        const lists = cloneLists(current.lists)
+        const fromList = lists.find((list) => list.id === fromListId)
+        const toList = lists.find((list) => list.id === toListId)
+        if (!fromList || !toList) return current
+
+        const cardCount = fromList.cards.length
+        // Move all cards from fromList to the end of toList
+        if (cardCount > 0) {
+          toList.cards.push(...fromList.cards)
+          fromList.cards = []
+          const activity = ActivityHelpers.cardsMovedAll(DEFAULT_USER, fromList.title, toList.title, cardCount)
+          return {
+            ...current,
+            lists,
+            activities: [activity, ...current.activities],
+          }
+        }
 
         return {
           ...current,
@@ -347,9 +398,12 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         const [list] = lists.splice(fromIndex, 1)
         lists.splice(adjustedIndex, 0, list)
 
+        const activity = ActivityHelpers.listMoved(DEFAULT_USER, list.title, adjustedIndex)
+
         return {
           ...current,
           lists,
+          activities: [activity, ...current.activities],
         }
       })
     },
@@ -368,12 +422,14 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         if (!card) return current
 
         list.cards = list.cards.filter((c) => c.id !== cardId)
+        const activity = ActivityHelpers.cardArchived(DEFAULT_USER, card.title)
 
         return {
           ...current,
           lists,
           archivedCards: [...current.archivedCards, { cardId, listId }],
           labels: computeLabels(lists),
+          activities: [activity, ...current.activities],
         }
       })
     },
@@ -389,12 +445,14 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         if (listIndex === -1) return current
 
         const [archivedList] = lists.splice(listIndex, 1)
+        const activity = ActivityHelpers.listArchived(DEFAULT_USER, archivedList.title, archivedList.cards.length)
 
         return {
           ...current,
           lists,
           archivedLists: [...current.archivedLists, archivedList],
           labels: computeLabels(lists),
+          activities: [activity, ...current.activities],
         }
       })
     },
@@ -422,12 +480,14 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         if (!targetList) return current
 
         targetList.cards = [...targetList.cards, archivedCard]
+        const activity = ActivityHelpers.cardRestored(DEFAULT_USER, archivedCard.title, targetList.title)
 
         return {
           ...current,
           lists,
           archivedCards: current.archivedCards.filter((ac) => ac.cardId !== cardId),
           labels: computeLabels(lists),
+          activities: [activity, ...current.activities],
         }
       })
     },
@@ -437,10 +497,21 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
   const deleteCard = useCallback(
     (boardId: string, cardId: string) => {
       if (!boardId) return
-      setBoardState(boardId, (current) => ({
-        ...current,
-        archivedCards: current.archivedCards.filter((ac) => ac.cardId !== cardId),
-      }))
+      setBoardState(boardId, (current) => {
+        // Try to find the card in archived lists to get its title
+        const archivedCard = current.archivedLists
+          .flatMap((l) => l.cards)
+          .find((c) => c.id === cardId)
+        
+        const cardTitle = archivedCard?.title || "Unknown card"
+        const activity = ActivityHelpers.cardDeleted(DEFAULT_USER, cardTitle)
+
+        return {
+          ...current,
+          archivedCards: current.archivedCards.filter((ac) => ac.cardId !== cardId),
+          activities: [activity, ...current.activities],
+        }
+      })
     },
     [setBoardState],
   )
@@ -452,10 +523,13 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         const lists = cloneLists(current.lists)
         const list = lists.find((l) => l.id === listId)
         if (!list) return current
+        const oldTitle = list.title
         list.title = newTitle
+        const activity = ActivityHelpers.listRenamed(DEFAULT_USER, oldTitle, newTitle)
         return {
           ...current,
           lists,
+          activities: [activity, ...current.activities],
         }
       })
     },
@@ -489,10 +563,13 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
           })),
         }
 
+        const activity = ActivityHelpers.listCopied(DEFAULT_USER, listToCopy.title, newList.title)
+
         return {
           ...current,
           lists: [...lists, newList],
           labels: computeLabels([...lists, newList]),
+          activities: [activity, ...current.activities],
         }
       })
     },
@@ -517,10 +594,52 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
 
         list.cards[cardIndex] = mergedCard
 
+        // Determine what changed and create appropriate activities
+        const activities: Activity[] = []
+        
+        // Check for title change
+        if (updatedCard.title && updatedCard.title !== existingCard.title) {
+          activities.push(ActivityHelpers.cardRenamed(DEFAULT_USER, existingCard.title, updatedCard.title))
+        }
+        
+        // Check for description change
+        if (updatedCard.description !== undefined && updatedCard.description !== existingCard.description) {
+          activities.push(ActivityHelpers.cardDescriptionChanged(DEFAULT_USER, mergedCard.title))
+        }
+        
+        // Check for due date changes
+        if (updatedCard.dueDate !== undefined) {
+          if (!existingCard.dueDate && updatedCard.dueDate) {
+            activities.push(ActivityHelpers.dueDateAdded(DEFAULT_USER, mergedCard.title, updatedCard.dueDate))
+          } else if (existingCard.dueDate && !updatedCard.dueDate) {
+            activities.push(ActivityHelpers.dueDateRemoved(DEFAULT_USER, mergedCard.title))
+          } else if (existingCard.dueDate && updatedCard.dueDate && existingCard.dueDate !== updatedCard.dueDate) {
+            activities.push(ActivityHelpers.dueDateChanged(DEFAULT_USER, mergedCard.title, existingCard.dueDate, updatedCard.dueDate))
+          }
+        }
+
+        // Check for start date changes
+        if (updatedCard.startDate !== undefined) {
+          if (!existingCard.startDate && updatedCard.startDate) {
+            activities.push(ActivityHelpers.startDateAdded(DEFAULT_USER, mergedCard.title, updatedCard.startDate))
+          } else if (existingCard.startDate && !updatedCard.startDate) {
+            activities.push(ActivityHelpers.startDateRemoved(DEFAULT_USER, mergedCard.title))
+          } else if (existingCard.startDate && updatedCard.startDate && existingCard.startDate !== updatedCard.startDate) {
+            activities.push(ActivityHelpers.startDateChanged(DEFAULT_USER, mergedCard.title, existingCard.startDate, updatedCard.startDate))
+          }
+        }
+
+        // If no specific activities created, create a generic update activity
+        if (activities.length === 0 && Object.keys(updatedCard).length > 0) {
+          const changes = Object.keys(updatedCard).join(", ")
+          activities.push(ActivityHelpers.cardUpdated(DEFAULT_USER, mergedCard.title, changes))
+        }
+
         return {
           ...current,
           lists,
           labels: computeLabels(lists),
+          activities: [...activities, ...current.activities],
         }
       })
     },
@@ -582,10 +701,13 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
           })
         })
         
+        const activity = ActivityHelpers.labelRenamed(DEFAULT_USER, oldName, newName)
+        
         return {
           ...current,
           lists,
           labels: computeLabels(lists),
+          activities: [activity, ...current.activities],
         }
       })
     },
@@ -607,10 +729,13 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
           })
         })
         
+        const activity = ActivityHelpers.labelDeleted(DEFAULT_USER, labelName)
+        
         return {
           ...current,
           lists,
           labels: computeLabels(lists),
+          activities: [activity, ...current.activities],
         }
       })
     },
@@ -625,6 +750,7 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
       addList,
       addCard,
       moveCard,
+      moveAllCards,
       moveList,
       archiveCard,
       archiveList,
@@ -651,6 +777,7 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
       getLabels,
       getLists,
       moveCard,
+      moveAllCards,
       moveList,
       renameLabelGlobally,
       renameList,

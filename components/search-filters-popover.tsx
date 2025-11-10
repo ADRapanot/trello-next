@@ -96,7 +96,6 @@ export function SearchFiltersPopover({
       <PopoverTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-2 text-white hover:bg-white/20 h-8 px-2">
           <Filter className="h-4 w-4" />
-          <span className="text-xs">Filters</span>
           {activeFilterCount > 0 && (
             <Badge
               variant="secondary"

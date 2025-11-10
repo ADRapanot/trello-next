@@ -22,7 +22,7 @@ export function AddListForm({ onAdd, onCancel }: AddListFormProps) {
   }
 
   return (
-    <Card className="flex-shrink-0 w-72 bg-background/95 backdrop-blur-sm p-3">
+    <Card className="kanban-list-wrapper flex-shrink-0 w-72 h-fit bg-background/95 backdrop-blur-sm p-3">
       <Input
         placeholder="Enter list title..."
         value={title}

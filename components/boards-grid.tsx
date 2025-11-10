@@ -1,20 +1,23 @@
 "use client"
 
 import { useState } from "react"
-import { Star, Plus } from "lucide-react"
+import { Star, Plus, Archive } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { CreateBoardModal } from "@/components/create-board-modal"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useBoardStore, type Board } from "@/store/boards-store"
+import { ArchivedBoardsView } from "@/components/archived-boards-view"
 
 export function BoardsGrid() {
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const { boards, toggleFavorite, addBoard } = useBoardStore()
+  const [isArchivedViewOpen, setIsArchivedViewOpen] = useState(false)
+  const { getActiveBoards, toggleFavorite, addBoard } = useBoardStore()
 
-  const favoriteBoards = boards.filter((board) => board.isFavorite)
-  const otherBoards = boards.filter((board) => !board.isFavorite)
+  const activeBoards = getActiveBoards()
+  const favoriteBoards = activeBoards.filter((board) => board.isFavorite)
+  const otherBoards = activeBoards.filter((board) => !board.isFavorite)
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -33,7 +36,18 @@ export function BoardsGrid() {
       )}
 
       <section>
-        <h2 className="text-white font-semibold text-lg mb-4">Your Boards</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-white font-semibold text-lg">Your Boards</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-white hover:bg-white/20 gap-2"
+            onClick={() => setIsArchivedViewOpen(true)}
+          >
+            <Archive className="h-4 w-4" />
+            View Archived
+          </Button>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {otherBoards.map((board) => (
             <BoardCard key={board.id} board={board} onToggleFavorite={toggleFavorite} />
@@ -55,6 +69,8 @@ export function BoardsGrid() {
         onOpenChange={setIsModalOpen}
         onCreateBoard={(title, background, icon, description) => addBoard({ title, background, icon, description })}
       />
+
+      <ArchivedBoardsView open={isArchivedViewOpen} onOpenChange={setIsArchivedViewOpen} />
     </div>
   )
 }

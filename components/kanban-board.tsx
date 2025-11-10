@@ -1,12 +1,13 @@
 "use client"
 
-import { useMemo, useEffect, useState, useRef } from "react"
+import { useMemo, useEffect, useState, useRef, useCallback } from "react"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { KanbanList } from "@/components/kanban-list"
 import { AddListForm } from "@/components/add-list-form"
 import type { Card, List } from "@/store/types"
 import { useKanbanStore } from "@/store/kanban-store"
+import { useAutomationTriggers } from "@/hooks/use-automation-triggers"
 
 export interface FilterState {
   labels: string[]
@@ -30,15 +31,244 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
     addList,
     addCard,
     moveCard,
+    moveAllCards,
     moveList,
     archiveCard,
     archiveList,
     renameList,
     copyList,
     updateCard,
+    addActivity,
   } = useKanbanStore()
 
   const lists = getLists(boardId)
+  
+  // Activity logging callback for automations
+  const logActivity = useCallback((activity: any) => {
+    addActivity(boardId, activity)
+  }, [boardId, addActivity])
+  
+  const { triggerAutomations } = useAutomationTriggers(boardId, logActivity)
+  
+  // Wrapper for addCard with automation support
+  const handleAddCard = (listId: string, title: string) => {
+    // First add the card and get its ID
+    const newCardId = addCard(boardId, listId, title)
+    
+    // Create a card object matching what was added (we know the structure)
+    const newCard: Card = {
+      id: newCardId,
+      title,
+      attachments: [],
+      comments: [],
+      checklists: [],
+    }
+    
+    // Trigger automations immediately with the card object
+    const currentLists = getLists(boardId)
+    const result = triggerAutomations(
+      "card-created",
+      { card: newCard, listId },
+      currentLists.map(l => l.id),
+      availableMembers
+    )
+    
+    // Apply automation actions after a brief delay to let the addCard state update propagate
+    if (result.updatedCard || result.shouldMoveCard || result.shouldArchive) {
+      setTimeout(() => {
+        if (result.updatedCard) {
+          updateCard(boardId, listId, newCardId, result.updatedCard)
+        }
+        
+        // Move card if automation requires it
+        if (result.shouldMoveCard && result.targetListId) {
+          moveCard(boardId, newCardId, listId, result.targetListId, 0)
+        }
+        
+        // Archive card if automation requires it
+        if (result.shouldArchive) {
+          archiveCard(boardId, newCardId, result.targetListId || listId)
+        }
+      }, 100)
+    }
+  }
+  
+  // Wrapper for moveCard with automation support
+  const handleMoveCard = (cardId: string, fromListId: string, toListId: string, toIndex: number, shouldTriggerAutomation = true) => {
+    const currentLists = getLists(boardId)
+    
+    // Find the card in its CURRENT position (might have been moved by hover)
+    let card: Card | undefined
+    let actualFromListId = fromListId
+    
+    for (const list of currentLists) {
+      const foundCard = list.cards.find(c => c.id === cardId)
+      if (foundCard) {
+        card = foundCard
+        actualFromListId = list.id
+        break
+      }
+    }
+    
+    console.log('🔄 handleMoveCard:', {
+      cardId,
+      cardTitle: card?.title,
+      fromListId,
+      actualFromListId,
+      toListId,
+      toIndex,
+      shouldTriggerAutomation,
+      willTriggerAutomation: shouldTriggerAutomation && !!card && fromListId !== toListId
+    })
+    
+    // Move the card first
+    moveCard(boardId, cardId, actualFromListId, toListId, toIndex)
+    
+    // Trigger automations ONLY if explicitly requested (on final drop, not during hover)
+    // Use the ORIGINAL fromListId for automation logic (to detect list changes)
+    if (shouldTriggerAutomation && card && fromListId !== toListId) {
+      console.log('✅ TRIGGERING AUTOMATION for card move from', fromListId, 'to', toListId)
+      setTimeout(() => {
+        const result = triggerAutomations(
+          "card-moved",
+          { card, fromListId, toListId, listId: toListId },
+          currentLists.map(l => l.id),
+          availableMembers
+        )
+        
+        // Apply automation actions
+        if (result.updatedCard) {
+          updateCard(boardId, toListId, cardId, result.updatedCard)
+        }
+        
+        // Move card again if automation requires it
+        if (result.shouldMoveCard && result.targetListId && result.targetListId !== toListId) {
+          moveCard(boardId, cardId, toListId, result.targetListId, 0)
+        }
+        
+        // Archive card if automation requires it
+        if (result.shouldArchive) {
+          archiveCard(boardId, cardId, result.targetListId || toListId)
+        }
+      }, 50)
+    } else if (shouldTriggerAutomation) {
+      console.log('❌ NOT triggering automation:', {
+        hasCard: !!card,
+        listsAreDifferent: fromListId !== toListId,
+        fromListId,
+        toListId
+      })
+    }
+  }
+  
+  // Wrapper for updateCard with automation support
+  const handleUpdateCard = (listId: string, cardId: string, updatedCard: any) => {
+    const currentLists = getLists(boardId)
+    const list = currentLists.find(l => l.id === listId)
+    const originalCard = list?.cards.find(c => c.id === cardId)
+    
+    console.log('🔄 handleUpdateCard called with:', {
+      cardId,
+      updateKeys: Object.keys(updatedCard || {}),
+      updatedCard
+    })
+    
+    // Check if there are any actual changes before proceeding
+    if (!updatedCard || Object.keys(updatedCard).length === 0) {
+      console.log('⏭️ Skipping update - no changes')
+      return
+    }
+    
+    // Update the card first
+    updateCard(boardId, listId, cardId, updatedCard)
+    
+    // Check for automation triggers
+    if (originalCard) {
+      const mergedCard = { ...originalCard, ...updatedCard }
+      
+      // Detect what changed
+      const triggers: Array<{
+        type: "label-added" | "label-removed" | "member-added" | "member-removed" | "card-completed" | "due-date-set"
+        context?: any
+      }> = []
+      
+      const oldLabels = originalCard.labels || []
+      const newLabels = mergedCard.labels || []
+      const oldMembers = originalCard.members || []
+      const newMembers = mergedCard.members || []
+      const oldComplete = originalCard.isComplete || false
+      const newComplete = mergedCard.isComplete || false
+      const oldDueDate = originalCard.dueDate
+      const newDueDate = mergedCard.dueDate
+      
+      // Check for label changes
+      if (newLabels.length > oldLabels.length) {
+        // Label added
+        const addedLabel = newLabels.find((label: string) => !oldLabels.includes(label))
+        triggers.push({ type: "label-added", context: { addedLabel } })
+      } else if (newLabels.length < oldLabels.length) {
+        // Label removed
+        const removedLabel = oldLabels.find((label: string) => !newLabels.includes(label))
+        triggers.push({ type: "label-removed", context: { removedLabel } })
+      }
+      
+      // Check for member changes
+      if (newMembers.length > oldMembers.length) {
+        // Member added
+        const addedMember = newMembers.find((member: any) => 
+          !oldMembers.some((m: any) => m.id === member.id)
+        )
+        triggers.push({ type: "member-added", context: { addedMember: addedMember?.id } })
+      } else if (newMembers.length < oldMembers.length) {
+        // Member removed
+        const removedMember = oldMembers.find((member: any) => 
+          !newMembers.some((m: any) => m.id === member.id)
+        )
+        triggers.push({ type: "member-removed", context: { removedMember: removedMember?.id } })
+      }
+      
+      // Check for completion status change
+      if (!oldComplete && newComplete) {
+        triggers.push({ type: "card-completed" })
+      }
+      
+      // Check for due date set or changed (only if dueDate was actually updated)
+      if ('dueDate' in updatedCard) {
+        if ((!oldDueDate && newDueDate) || (oldDueDate && newDueDate && oldDueDate !== newDueDate)) {
+          triggers.push({ type: "due-date-set" })
+        }
+      }
+      
+      // Execute all detected triggers only if there are any
+      if (triggers.length > 0) {
+        triggers.forEach(({ type: triggerType, context = {} }) => {
+          setTimeout(() => {
+            const result = triggerAutomations(
+              triggerType,
+              { card: mergedCard, listId, ...context },
+              currentLists.map(l => l.id),
+              availableMembers
+            )
+            
+            // Apply automation actions
+            if (result.updatedCard) {
+              updateCard(boardId, listId, cardId, result.updatedCard)
+            }
+            
+            // Move card if automation requires it
+            if (result.shouldMoveCard && result.targetListId) {
+              moveCard(boardId, cardId, listId, result.targetListId, 0)
+            }
+            
+            // Archive card if automation requires it
+            if (result.shouldArchive) {
+              archiveCard(boardId, cardId, result.targetListId || listId)
+            }
+          }, 50)
+        })
+      }
+    }
+  }
 
   const availableLabels = useMemo(() => {
     const labelSet = new Set<string>()
@@ -137,7 +367,7 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
   }, [lists, cardMatchesFilters, filters])
 
   return (
-    <div className="h-full overflow-x-auto overflow-y-hidden">
+    <div className="kanban-board-container h-full overflow-x-auto overflow-y-hidden">
       <div className="flex gap-4 px-4 py-4 h-full">
         {filteredLists.map((list, index) => {
           // Find the original index in the unfiltered lists
@@ -148,18 +378,15 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
               list={list}
               boardId={boardId}
               listIndex={originalIndex >= 0 ? originalIndex : index}
-              onMoveCard={(cardId, fromListId, toListId, toIndex) =>
-                moveCard(boardId, cardId, fromListId, toListId, toIndex)
-              }
-              onAddCard={(listId, title) => addCard(boardId, listId, title)}
+              onMoveCard={handleMoveCard}
+              onAddCard={handleAddCard}
               onArchiveList={(listId) => archiveList(boardId, listId)}
               onArchiveCard={(cardId, listId) => archiveCard(boardId, cardId, listId)}
               onRenameList={(listId, newTitle) => renameList(boardId, listId, newTitle)}
               onCopyList={(listId) => copyList(boardId, listId)}
+              onMoveAllCards={(fromListId, toListId) => moveAllCards(boardId, fromListId, toListId)}
               allLists={lists.map((l) => ({ id: l.id, title: l.title }))}
-              onUpdateCard={(listId, cardId, updatedCard) =>
-                updateCard(boardId, listId, cardId, updatedCard)
-              }
+              onUpdateCard={handleUpdateCard}
               onMoveList={(listId, toIndex) => moveList(boardId, listId, toIndex)}
             />
           )
@@ -176,7 +403,7 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
         ) : (
           <Button
             variant="ghost"
-            className="flex-shrink-0 w-72 h-fit bg-white/20 hover:bg-white/30 text-white justify-start"
+            className="kanban-list-wrapper flex-shrink-0 w-60 h-fit bg-white/20 hover:bg-white/30 text-white justify-start"
             onClick={() => setIsAddingList(true)}
           >
             <Plus className="h-4 w-4 mr-2" />

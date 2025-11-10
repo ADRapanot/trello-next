@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowLeft, Star, MoreHorizontal, Image as ImageIcon, Activity as ActivityIcon, Info } from "lucide-react"
+import { ArrowLeft, Star, MoreHorizontal, Image as ImageIcon, Activity as ActivityIcon, Info, Copy, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import Link from "next/link"
@@ -14,6 +14,8 @@ import { BoardFiltersPopover } from "@/components/board-filters-popover"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ActivityFeed } from "@/components/activity-feed"
 import { EditBoardModal } from "@/components/edit-board-modal"
+import { CopyBoardModal } from "@/components/copy-board-modal"
+import { CloseBoardDialog } from "@/components/close-board-dialog"
 import { useBoardStore } from "@/store/boards-store"
 
 interface BoardNavbarProps {
@@ -38,6 +40,8 @@ export function BoardNavbar({
   const [isBackgroundSelectorOpen, setIsBackgroundSelectorOpen] = useState(false)
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState(false)
+  const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false)
   const { getBoardById, updateBoard } = useBoardStore()
   const board = boardId ? (getBoardById(boardId) ?? null) : null
   const resolvedTitle = boardTitle ?? "Product Roadmap"
@@ -69,7 +73,7 @@ export function BoardNavbar({
               availableMembers={availableMembers}
             />
           )}
-          <ButlerAutomation />
+          <ButlerAutomation boardId={boardId} />
           <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -89,6 +93,14 @@ export function BoardNavbar({
               <DropdownMenuItem onClick={() => setIsBackgroundSelectorOpen(true)}>
                 <ImageIcon className="h-4 w-4 mr-2" />
                 Change Background
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsCopyModalOpen(true)}>
+                <Copy className="h-4 w-4 mr-2" />
+                Copy Board
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsCloseDialogOpen(true)} className="text-destructive">
+                <XCircle className="h-4 w-4 mr-2" />
+                Close Board
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -127,6 +139,10 @@ export function BoardNavbar({
             }
           }}
         />
+
+        <CopyBoardModal board={board} open={isCopyModalOpen} onOpenChange={setIsCopyModalOpen} />
+
+        <CloseBoardDialog board={board} open={isCloseDialogOpen} onOpenChange={setIsCloseDialogOpen} />
       </div>
     </nav>
   )
