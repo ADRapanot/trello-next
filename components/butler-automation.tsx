@@ -250,14 +250,14 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
       },
       {
         id: "rules-active" as AutomationTab,
-        label: "Active rule",
+        label: "Active",
         icon: ToggleRight,
         description: "View all enabled automations",
         count: boardRules.filter((r) => r.enabled).length,
       },
       {
         id: "rules-inactive" as AutomationTab,
-        label: "Inactive rule",
+        label: "Inactive",
         icon: ToggleLeft,
         description: "View all disabled automations",
         count: boardRules.filter((r) => !r.enabled).length,
