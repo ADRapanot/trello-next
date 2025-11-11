@@ -24,12 +24,26 @@ function LabelBadge({ label }: { label: string }) {
   )
 }
 
+type DragMeta = {
+  listId: string
+  index: number
+}
+
+const cardDragMeta = new Map<string, DragMeta>()
+
 interface KanbanCardProps {
   card: CardType
   listId: string
   index: number
   boardId: string
-  onMoveCard: (cardId: string, fromListId: string, toListId: string, toIndex: number, shouldTriggerAutomation?: boolean) => void
+  onMoveCard: (
+    cardId: string,
+    fromListId: string,
+    toListId: string,
+    toIndex: number,
+    shouldTriggerAutomation?: boolean,
+    originalListId?: string,
+  ) => void
   onArchiveCard?: (cardId: string, listId: string) => void
   allLists?: { id: string; title: string }[]
   onUpdateCard?: (listId: string, cardId: string, updatedCard: any) => void
@@ -54,20 +68,27 @@ export function KanbanCard({
   const lastHoveredItemRef = useRef<{ id: string; listId: string; index: number } | null>(null)
   const draggedItemIdRef = useRef<string | null>(null)
   const isMovingRef = useRef(false)
+  const initialListIdRef = useRef(listId)
+  const initialIndexRef = useRef(index)
 
   // Sync local state with card prop when it changes
   useEffect(() => {
     setIsComplete(card.isComplete || false)
   }, [card.isComplete])
 
-  const [{ isDragging }, drag, preview] = useDrag({
+  const [{ isDragging }, drag, preview] = useDrag(() => ({
     type: "CARD",
-    item: { 
-      id: card.id, 
-      listId, 
-      index,
-      originalListId: listId,  // Store original position for automation
-      originalIndex: index
+    item: () => {
+      const origin = cardDragMeta.get(card.id) ?? { listId, index }
+      cardDragMeta.set(card.id, origin)
+      return {
+        id: card.id,
+        listId,
+        index,
+        originalListId: origin.listId,
+        originalIndex: origin.index,
+        dropHandled: false as boolean,
+      }
     },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
@@ -85,15 +106,29 @@ export function KanbanCard({
       })
       
       // If no drop handler fired AND list changed, trigger automation manually
-      if (!didDrop && item.originalListId && item.listId && item.originalListId !== item.listId) {
+      if ((!didDrop || !item.dropHandled) && item.originalListId && item.listId && item.originalListId !== item.listId) {
         console.log('🔥 Triggering automation from drag END (no drop handler fired)')
         // Find current position
         setTimeout(() => {
-          onMoveCard(item.id, item.originalListId!, item.listId, item.index || 0, true)
+          onMoveCard(item.id, item.originalListId!, item.listId, item.index || 0, true, item.originalListId)
         }, 10)
       }
     }
-  })
+  }))
+
+  // Keep origin metadata up to date whenever drag is inactive
+  useEffect(() => {
+    if (!isDragging) {
+      cardDragMeta.set(card.id, { listId, index })
+    }
+  }, [isDragging, card.id, listId, index])
+
+  useEffect(
+    () => () => {
+      cardDragMeta.delete(card.id)
+    },
+    [card.id],
+  )
 
   // Reset hover ref when dragging ends
   useEffect(() => {
@@ -104,11 +139,19 @@ export function KanbanCard({
     }
   }, [isDragging])
 
-  const handleHover = useCallback((item: { id: string; listId: string; index: number; originalListId?: string; originalIndex?: number }, monitor: any) => {
+  const handleHover = useCallback((item: { id: string; listId: string; index: number; originalListId?: string; originalIndex?: number; dropHandled?: boolean }, monitor: any) => {
     if (item.id === card.id) {
       draggedItemIdRef.current = null
       isMovingRef.current = false
       return
+    }
+
+    if (!item.originalListId) {
+      const origin = cardDragMeta.get(item.id)
+      if (origin) {
+        item.originalListId = origin.listId
+        item.originalIndex = origin.index
+      }
     }
     
     // Track the dragged item
@@ -134,7 +177,7 @@ export function KanbanCard({
     lastHoveredItemRef.current = { id: item.id, listId, index }
     isMovingRef.current = true
     // Move card for visual preview but DON'T trigger automation (false parameter)
-    onMoveCard(item.id, item.listId, listId, index, false)
+    onMoveCard(item.id, item.listId, listId, index, false, item.originalListId)
     // Update current position (but keep original position intact)
     item.listId = listId
     item.index = index
@@ -150,7 +193,7 @@ export function KanbanCard({
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: "CARD",
     hover: handleHover,
-    drop: (item: { id: string; listId: string; index: number; originalListId?: string; originalIndex?: number }, monitor) => {
+    drop: (item: { id: string; listId: string; index: number; originalListId?: string; originalIndex?: number; dropHandled?: boolean }, monitor) => {
       // On actual drop, trigger automation using ORIGINAL position
       // This ensures automations fire correctly even after hover moves
       if (!monitor.didDrop() && item.id !== card.id) {
@@ -164,7 +207,8 @@ export function KanbanCard({
           currentListId: item.listId,
           shouldTriggerAutomation: true
         })
-        onMoveCard(item.id, fromListId, listId, index, true)
+        item.dropHandled = true
+        onMoveCard(item.id, fromListId, listId, index, true, item.originalListId)
       }
     },
     collect: (monitor) => {

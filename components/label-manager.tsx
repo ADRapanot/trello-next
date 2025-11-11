@@ -253,8 +253,8 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
           </Button>
         )}
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0 fixed z-[100]" align="start" sideOffset={5}>
-        <div className="flex flex-col max-h-[500px]">
+      <PopoverContent className="w-80 p-0 fixed z-[100] max-h-[400px]" align="start" side="right" sideOffset={5}>
+        <div className="flex flex-col max-h-[400px]">
           <div className="p-3 flex-shrink-0">
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-semibold text-sm">Labels</h4>

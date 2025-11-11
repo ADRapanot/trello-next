@@ -77,7 +77,13 @@ interface CardDetailsModalProps {
   listId?: string
   boardId?: string
   onArchiveCard?: (cardId: string, listId: string) => void
-  onMoveCard?: (cardId: string, fromListId: string, toListId: string, toIndex: number) => void
+  onMoveCard?: (
+    cardId: string,
+    fromListId: string,
+    toListId: string,
+    toIndex: number,
+    originalListId?: string,
+  ) => void
   onDeleteCard?: (cardId: string, listId: string) => void
 }
 
@@ -180,12 +186,14 @@ export function CardDetailsModal({
     (updater: (prev: Checklist[]) => Checklist[]) => {
       setChecklists((prev) => {
         const updated = updater(prev)
-        commitUpdate({ checklists: updated, checklist: computeChecklistSummary(updated) })
+        if (updated === prev) return prev
         return updated
       })
     },
-    [commitUpdate],
+    [],
   )
+
+  const lastCommittedChecklistsRef = useRef<string>(JSON.stringify(card.checklists || []))
 
   useEffect(() => {
     setSelectedMembers(card.members || [])
@@ -205,7 +213,17 @@ export function CardDetailsModal({
 
   useEffect(() => {
     setChecklists(card.checklists || [])
+    lastCommittedChecklistsRef.current = JSON.stringify(card.checklists || [])
   }, [card.checklists])
+
+  useEffect(() => {
+    const serialized = JSON.stringify(checklists)
+    if (serialized === lastCommittedChecklistsRef.current) {
+      return
+    }
+    lastCommittedChecklistsRef.current = serialized
+    commitUpdate({ checklists, checklist: computeChecklistSummary(checklists) })
+  }, [checklists, commitUpdate])
 
   useEffect(() => {
     setIsComplete(card.isComplete || false)
@@ -317,16 +335,18 @@ export function CardDetailsModal({
 
   const [newItemTexts, setNewItemTexts] = useState<{ [key: string]: string }>({})
 
-  const toggleLabel = (labelName: string) => {
-    setSelectedLabels((prev) => {
-      const isSelected = prev.includes(labelName)
-      const newLabels = isSelected 
-        ? prev.filter((l) => l !== labelName) 
-        : [...prev, labelName]
-      // Deduplicate before returning
-      return Array.from(new Set(newLabels))
-    })
-  }
+  const toggleLabel = useCallback(
+    (labelName: string) => {
+      const isSelected = selectedLabels.includes(labelName)
+      const nextLabels = isSelected
+        ? selectedLabels.filter((l) => l !== labelName)
+        : [...selectedLabels, labelName]
+      const deduped = Array.from(new Set(nextLabels))
+      setSelectedLabels(deduped)
+      commitUpdate({ labels: deduped })
+    },
+    [selectedLabels, commitUpdate],
+  )
 
   const addChecklistItem = (checklistId: string, text: string) => {
     updateChecklists((prev) =>
@@ -937,7 +957,11 @@ export function CardDetailsModal({
                           variant="ghost"
                           size="icon"
                           className="h-4 w-4 p-0"
-                          onClick={() => setSelectedMembers(selectedMembers.filter((m) => m.id !== member.id))}
+                          onClick={() => {
+                            const updatedMembers = selectedMembers.filter((m) => m.id !== member.id)
+                            setSelectedMembers(updatedMembers)
+                            commitUpdate({ members: updatedMembers })
+                          }}
                         >
                           <X className="h-3 w-3" />
                         </Button>

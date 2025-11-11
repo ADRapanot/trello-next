@@ -87,8 +87,8 @@ export function MembersManager({ selectedMembers, onMembersChange, variant = "bu
           </div>
         )}
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0 fixed z-[100]" align="start" sideOffset={5}>
-        <div className="flex flex-col max-h-[500px]">
+      <PopoverContent className="w-80 p-0 fixed z-[100] max-h-[400px]" side="right" align="start" sideOffset={5}>
+        <div className="flex flex-col max-h-[400px]">
           <div className="p-3 flex-shrink-0">
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-semibold text-sm">Members</h4>

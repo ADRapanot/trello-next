@@ -26,9 +26,19 @@ interface RuleEditorDialogProps {
   onClose: () => void
   onSave: (ruleId: string, updates: Partial<AutomationRule>) => void
   boardId?: string
+  onCreate?: (payload: Omit<AutomationRule, "id" | "runCount" | "lastRun">) => void
+  mode?: "create" | "edit"
 }
 
-export function RuleEditorDialog({ rule, isOpen, onClose, onSave, boardId = "1" }: RuleEditorDialogProps) {
+export function RuleEditorDialog({
+  rule,
+  isOpen,
+  onClose,
+  onSave,
+  boardId = "1",
+  onCreate,
+  mode = "edit",
+}: RuleEditorDialogProps) {
   const { getLabels, getLists } = useKanbanStore()
   const [name, setName] = useState("")
   const [trigger, setTrigger] = useState<AutomationRule["trigger"]>("card-created")
@@ -88,18 +98,37 @@ export function RuleEditorDialog({ rule, isOpen, onClose, onSave, boardId = "1" 
 
   const handleSave = () => {
     if (!rule) return
-    
-    onSave(rule.id, {
-      name,
-      trigger: rule.type === "rule" ? trigger : undefined,
-      conditions,
-      actions,
-    })
-    
-    toast.success("Automation updated!", {
-      description: name,
-    })
-    
+
+    if (mode === "create" && onCreate) {
+      const payload: Omit<AutomationRule, "id" | "runCount" | "lastRun"> = {
+        boardId: boardId || rule.boardId,
+        name,
+        enabled: rule.enabled ?? true,
+        type: rule.type,
+        trigger: rule.type === "rule" ? trigger : undefined,
+        conditions,
+        actions,
+        dueDateTrigger: rule.type === "due-date" ? rule.dueDateTrigger : undefined,
+        schedule: rule.type === "scheduled" ? rule.schedule : undefined,
+      }
+
+      onCreate(payload)
+      toast.success("Automation created!", {
+        description: name,
+      })
+    } else {
+      onSave(rule.id, {
+        name,
+        trigger: rule.type === "rule" ? trigger : undefined,
+        conditions,
+        actions,
+      })
+
+      toast.success("Automation updated!", {
+        description: name,
+      })
+    }
+
     onClose()
   }
 
@@ -148,7 +177,7 @@ export function RuleEditorDialog({ rule, isOpen, onClose, onSave, boardId = "1" 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl h-[80vh] p-0 gap-0">
+      <DialogContent className="max-w-3xl p-0 gap-0">
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>Edit Automation Rule</DialogTitle>
         </DialogHeader>

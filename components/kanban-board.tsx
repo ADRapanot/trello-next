@@ -100,6 +100,7 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
     toListId: string,
     toIndex: number,
     shouldTriggerAutomation = true,
+    originalListId?: string,
   ) => {
     const currentLists = getLists(boardId)
     
@@ -116,22 +117,30 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
       }
     }
     
+    const automationFromListId = originalListId ?? fromListId ?? actualFromListId
+    const movedBetweenLists = automationFromListId !== toListId || actualFromListId !== toListId
+    
     console.log('🔄 handleMoveCard:', {
       cardId,
       cardTitle: card?.title,
       fromListId,
+      originalListId,
       actualFromListId,
       toListId,
       toIndex,
       shouldTriggerAutomation,
-      willTriggerAutomation: shouldTriggerAutomation && !!card && fromListId !== toListId
+      willTriggerAutomation: shouldTriggerAutomation && !!card && automationFromListId !== toListId
     })
     
     // Move the card first
-    moveCard(boardId, cardId, actualFromListId, toListId, toIndex)
-    
-    const automationFromListId = fromListId ?? actualFromListId
-    const movedBetweenLists = automationFromListId !== toListId || actualFromListId !== toListId
+    moveCard(
+      boardId,
+      cardId,
+      actualFromListId,
+      toListId,
+      toIndex,
+      { logActivity: shouldTriggerAutomation },
+    )
     
     // Trigger automations ONLY if explicitly requested (on final drop, not during hover)
     // Use the ORIGINAL fromListId for automation logic (to detect list changes)
@@ -163,8 +172,8 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
     } else if (shouldTriggerAutomation) {
       console.log('❌ NOT triggering automation:', {
         hasCard: !!card,
-        listsAreDifferent: fromListId !== toListId,
-        fromListId,
+        listsAreDifferent: automationFromListId !== toListId,
+        originalListId: automationFromListId,
         toListId
       })
     }

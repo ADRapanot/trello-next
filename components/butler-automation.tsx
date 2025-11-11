@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { 
   Zap, 
   Plus, 
@@ -23,12 +23,24 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
-import { useAutomationStore, AutomationRule } from "@/store/automation-store"
+import { useAutomationStore, AutomationRule, AutomationTriggerType, AutomationAction } from "@/store/automation-store"
 import { Card } from "@/components/ui/card"
 import { RuleEditorDialog } from "./rule-editor-dialog"
 import { toast } from "sonner"
 
-type AutomationTab = "rules" | "scheduled" | "due-date"
+type AutomationTab = "rules" | "scheduled" | "due-date" | "rules-active" | "rules-inactive"
+
+const formatTriggerLabel = (trigger: AutomationTriggerType) =>
+  trigger
+    .split("-")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ")
+
+const formatActionLabel = (actionType: AutomationAction["type"]) =>
+  actionType
+    .split("-")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ")
 
 interface ButlerAutomationProps {
   boardId?: string
@@ -38,9 +50,32 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<AutomationTab>("rules")
   const [searchQuery, setSearchQuery] = useState("")
-  const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null)
+  const [templateDraft, setTemplateDraft] = useState<{
+    tempId: string
+    rule: Omit<AutomationRule, "id" | "runCount" | "lastRun">
+  } | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const [dialogHeight, setDialogHeight] = useState<number>(680)
+
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
+    const calculateHeight = () => {
+      const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 800
+      const computed = Math.min(Math.max(viewportHeight - 120, 520), 800)
+      setDialogHeight(computed)
+    }
+
+    calculateHeight()
+    window.addEventListener("resize", calculateHeight)
+
+    return () => {
+      window.removeEventListener("resize", calculateHeight)
+    }
+  }, [isOpen])
   
   // Subscribe to the entire store to ensure reactivity
   const allRules = useAutomationStore((state) => state.rules)
@@ -49,8 +84,35 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
   const toggleRule = useAutomationStore((state) => state.toggleRule)
   const addRule = useAutomationStore((state) => state.addRule)
   const updateRule = useAutomationStore((state) => state.updateRule)
+  const matchesRuleSearch = useCallback(
+    (rule: AutomationRule) => {
+      const query = searchQuery.trim().toLowerCase()
+      if (!query) {
+        return true
+      }
+
+      const fields: string[] = [
+        rule.name,
+        rule.type,
+        rule.trigger ?? "",
+        rule.trigger ? formatTriggerLabel(rule.trigger as AutomationTriggerType) : "",
+        ...(rule.conditions?.map((condition) => `${condition.field} ${condition.operator} ${condition.value}`) ?? []),
+        ...rule.actions.map((action) => `${action.type} ${action.value}`),
+      ]
+
+      return fields.some((field) => field.toLowerCase().includes(query))
+    },
+    [searchQuery]
+  )
   
-  const editingRule = editingRuleId ? allRules.find(r => r.id === editingRuleId) || null : null
+  const editingRuleFromStore = editingRuleId ? allRules.find(r => r.id === editingRuleId) || null : null
+  const ruleForEditor = templateDraft
+    ? ({
+        ...templateDraft.rule,
+        id: templateDraft.tempId,
+      } as AutomationRule)
+    : editingRuleFromStore
+  const isRuleEditorOpen = templateDraft !== null || editingRuleId !== null
   
   // Calculate board rules based on the subscribed allRules
   const boardRules = useMemo(() => {
@@ -58,21 +120,35 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
   }, [allRules, boardId])
   const totalRuleCount = boardRules.length
   
-  const activeRules = useMemo(() => {
-    let filtered = boardRules
-    
+  const filteredRules = useMemo(() => {
+    let rulesForTab = boardRules
+
     if (activeTab === "rules") {
-      filtered = boardRules.filter((r) => r.type === "rule")
+      rulesForTab = boardRules.filter((r) => r.type === "rule")
     } else if (activeTab === "scheduled") {
-      filtered = boardRules.filter((r) => r.type === "scheduled")
+      rulesForTab = boardRules.filter((r) => r.type === "scheduled")
     } else if (activeTab === "due-date") {
-      filtered = boardRules.filter((r) => r.type === "due-date")
+      rulesForTab = boardRules.filter((r) => r.type === "due-date")
+    } else if (activeTab === "rules-active") {
+      const enabled = boardRules.filter((r) => r.enabled)
+      const priority: Record<AutomationRule["type"], number> = {
+        rule: 0,
+        scheduled: 1,
+        "due-date": 2,
+      }
+      rulesForTab = enabled.slice().sort((a, b) => (priority[a.type] ?? 99) - (priority[b.type] ?? 99))
+    } else if (activeTab === "rules-inactive") {
+      const disabled = boardRules.filter((r) => !r.enabled)
+      const priority: Record<AutomationRule["type"], number> = {
+        rule: 0,
+        scheduled: 1,
+        "due-date": 2,
+      }
+      rulesForTab = disabled.slice().sort((a, b) => (priority[a.type] ?? 99) - (priority[b.type] ?? 99))
     }
-    
-    console.log("Active rules for tab", activeTab, ":", filtered)
-    
-    return filtered
-  }, [boardRules, activeTab, allRules])
+
+    return rulesForTab.filter(matchesRuleSearch)
+  }, [boardRules, activeTab, matchesRuleSearch])
 
   const menuItems = useMemo(() => {
     const items = [
@@ -96,6 +172,20 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
         icon: Clock,
         description: "Automate actions based on due dates",
         count: boardRules.filter((r) => r.type === "due-date").length,
+      },
+      {
+        id: "rules-active" as AutomationTab,
+        label: "Active rule",
+        icon: ToggleRight,
+        description: "View all enabled automations",
+        count: boardRules.filter((r) => r.enabled).length,
+      },
+      {
+        id: "rules-inactive" as AutomationTab,
+        label: "Inactive rule",
+        icon: ToggleLeft,
+        description: "View all disabled automations",
+        count: boardRules.filter((r) => !r.enabled).length,
       },
     ]
     console.log("Menu items counts:", items.map(i => `${i.label}: ${i.count}`))
@@ -219,8 +309,14 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
       template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       template.description.toLowerCase().includes(searchQuery.toLowerCase())
   )
+  const showTemplateSection = activeTab !== "rules-active" && activeTab !== "rules-inactive"
+  const showCreateButton = showTemplateSection
   
   const handleCreateFromTemplate = (template: typeof ruleTemplates[0]) => {
+    if (!showTemplateSection) {
+      return
+    }
+
     console.log("Creating automation from template:", template.title)
     
     // Map template to actual automation rule
@@ -258,7 +354,7 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
       actions = [{ id: `action_${Date.now()}`, type: "add-label", value: "" }]
     }
     
-    addRule({
+    const baseRule: Omit<AutomationRule, "id" | "runCount" | "lastRun"> = {
       boardId,
       name: template.title,
       enabled: true,
@@ -266,29 +362,31 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
       trigger: type === "rule" ? trigger : undefined,
       conditions: [],
       actions,
-      dueDateTrigger: type === "due-date" ? {
-        type: "before",
-        value: 1,
-        unit: "days"
-      } : undefined,
-      schedule: type === "scheduled" ? {
-        frequency: "daily"
-      } : undefined,
+      dueDateTrigger:
+        type === "due-date"
+          ? {
+              type: "before",
+              value: 1,
+              unit: "days",
+            }
+          : undefined,
+      schedule:
+        type === "scheduled"
+          ? {
+              frequency: "daily",
+            }
+          : undefined,
+    }
+
+    setTemplateDraft({
+      tempId: `draft_${Date.now()}`,
+      rule: baseRule,
     })
-    
-    toast.success("Automation created!", {
-      description: template.title,
+    setEditingRuleId(null)
+
+    toast.info("Template loaded", {
+      description: "Review and customize before creating your automation.",
     })
-    
-    console.log("Automation rule created successfully!")
-    
-    // Scroll to active automations section after a short delay
-    setTimeout(() => {
-      const activeRulesSection = document.querySelector('[data-active-rules]')
-      if (activeRulesSection) {
-        activeRulesSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-      }
-    }, 100)
   }
   
   const handleDeleteRule = (ruleId: string) => {
@@ -320,11 +418,17 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="!max-w-[90vw] w-[1200px] h-[85vh] max-h-[800px] p-0 gap-0 overflow-hidden [&>button]:hidden sm:!max-w-[90vw]">
+        <DialogContent
+          className="!max-w-[90vw] w-[1200px] p-0 gap-0 overflow-hidden [&>button]:hidden sm:!max-w-[90vw]"
+          style={{
+            height: dialogHeight,
+            maxHeight: dialogHeight,
+          }}
+        >
           <DialogTitle className="sr-only">Board Automation</DialogTitle>
           
           {/* Header */}
-          <div className="px-6 py-4 border-b flex items-center justify-between">
+          <div className="px-6 py-4 border-b flex flex-wrap items-center gap-4 justify-between">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
                 <Zap className="h-5 w-5 text-white" />
@@ -334,12 +438,23 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
                 <p className="text-xs text-muted-foreground">Powered by Butler</p>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
-              <X className="h-5 w-5" />
-            </Button>
+            <div className="flex items-center gap-3 flex-1 justify-end">
+              <div className="relative w-full max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder={`Search ${menuItems.find(m => m.id === activeTab)?.label.toLowerCase()}...`}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
 
-          <div className="flex h-[calc(100%-73px)] overflow-hidden">
+          <div className="flex  min-h-[750px] overflow-hidden">
             {/* Left Sidebar */}
             <div className="w-64 border-r bg-muted/20 flex-shrink-0">
               <div className="p-4 space-y-1">
@@ -362,7 +477,7 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium truncate">{item.label}</span>
-                          {item.count > 0 && (
+                          {item.count > 0 && !["rules", "scheduled", "due-date"].includes(item.id) && (
                             <Badge variant="secondary" className="h-5 px-1.5 text-xs">
                               {item.count}
                             </Badge>
@@ -395,19 +510,6 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Search Bar */}
-              <div className="p-6 border-b flex-shrink-0">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder={`Search ${menuItems.find(m => m.id === activeTab)?.label.toLowerCase()}...`}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-              </div>
-
               {/* Content Area */}
               <ScrollArea className="flex-1 overflow-y-auto" ref={scrollContainerRef as any}>
                 <div className="p-6 space-y-4 min-h-0">
@@ -421,57 +523,46 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
                         {menuItems.find(m => m.id === activeTab)?.description}
                       </p>
                     </div>
-                    <Button 
-                      size="sm" 
-                      className="gap-2"
-                      onClick={() => {
-                        // Create a placeholder rule and immediately set it for editing
-                        const placeholderRule: Omit<AutomationRule, "id" | "runCount"> = {
-                          boardId,
-                          name: "New Custom Rule",
-                          enabled: true,
-                          type: activeTab === "rules" ? "rule" : activeTab === "scheduled" ? "scheduled" : "due-date",
-                          trigger: activeTab === "rules" ? "card-created" : undefined,
-                          conditions: [],
-                          actions: [],
-                          dueDateTrigger: activeTab === "due-date" ? {
-                            type: "before",
-                            value: 1,
-                            unit: "days"
-                          } : undefined,
-                          schedule: activeTab === "scheduled" ? {
-                            frequency: "daily"
-                          } : undefined,
-                        }
-                        
-                        addRule(placeholderRule)
-                        
-                        // Wait for the rule to be added to the store, then open editor
-                        setTimeout(() => {
-                          // Get the most recently added rule for this board
-                          const boardRules = allRules.filter(r => r.boardId === boardId)
-                          const sortedRules = [...boardRules].sort((a, b) => {
-                            const aId = parseInt(a.id.split('_')[1])
-                            const bId = parseInt(b.id.split('_')[1])
-                            return bId - aId
-                          })
-                          
-                          if (sortedRules.length > 0) {
-                            setEditingRuleId(sortedRules[0].id)
-                            toast.info("Configure your custom automation", {
-                              description: "Edit dialog opened",
-                            })
+                    {showCreateButton && (
+                      <Button 
+                        size="sm" 
+                        className="gap-2"
+                        onClick={() => {
+                          // Create a placeholder rule and immediately set it for editing
+                          const placeholderRule: Omit<AutomationRule, "id" | "runCount"> = {
+                            boardId,
+                            name: "New Custom Rule",
+                            enabled: true,
+                            type: activeTab === "rules" ? "rule" : activeTab === "scheduled" ? "scheduled" : "due-date",
+                            trigger: activeTab === "rules" ? "card-created" : undefined,
+                            conditions: [],
+                            actions: [],
+                            dueDateTrigger: activeTab === "due-date" ? {
+                              type: "before",
+                              value: 1,
+                              unit: "days"
+                            } : undefined,
+                            schedule: activeTab === "scheduled" ? {
+                              frequency: "daily"
+                            } : undefined,
                           }
-                        }, 100)
-                      }}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create Custom
-                    </Button>
+                          
+                          const newRuleId = addRule(placeholderRule)
+                          setEditingRuleId(newRuleId)
+                          toast.info("Configure your custom automation", {
+                            description: "Edit dialog opened",
+                          })
+                        }}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Create Custom
+                      </Button>
+                    )}
                   </div>
 
                   {/* Templates Grid */}
-                  {filteredTemplates.length === 0 ? (
+                  {showTemplateSection ? (
+                    filteredTemplates.length === 0 ? (
                     <div className="text-center py-12">
                       <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
                         <Search className="h-8 w-8 text-muted-foreground" />
@@ -481,7 +572,7 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
                         Try adjusting your search query
                       </p>
                     </div>
-                  ) : (
+                    ) : (
                     <div className="grid gap-3">
                       {filteredTemplates.map((template) => (
                         <button
@@ -513,13 +604,18 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
                         </button>
                       ))}
                     </div>
-                  )}
+                    )
+                  ) : null}
 
                   {/* Active Automations */}
-                  {filteredTemplates.length > 0 && activeRules.length > 0 && (
-                    <div className="mt-8 space-y-3" data-active-rules>
-                      <h4 className="font-semibold text-sm">Active Automations ({activeRules.length})</h4>
-                      {activeRules.map((rule) => (
+                  {!showTemplateSection && filteredRules.length > 0 && (
+                    <div className={cn("mt-8 space-y-3", showTemplateSection ? "" : "mt-0")} data-active-rules>
+                      <h4 className="font-semibold text-sm">
+                        {activeTab === "rules-inactive"
+                          ? `Inactive Automations (${filteredRules.length})`
+                          : `Active Automations (${filteredRules.length})`}
+                      </h4>
+                      {filteredRules.map((rule) => (
                         <Card key={rule.id} className="p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
@@ -534,19 +630,32 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
                 </Badge>
               )}
             </div>
-                              {rule.trigger && (
-            <p className="text-xs text-muted-foreground mb-1">
-                                  <span className="font-medium">Trigger:</span> {rule.trigger}
-              </p>
+                              {(rule.trigger || rule.actions.length > 0 || (rule.runCount !== undefined && rule.runCount > 0)) && (
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+                                  {rule.trigger && (
+              <Badge className="text-xs font-medium tracking-tight border border-transparent bg-muted text-muted-foreground">
+                                        Trigger: {formatTriggerLabel(rule.trigger as AutomationTriggerType)}
+              </Badge>
             )}
-            <p className="text-xs text-muted-foreground">
-                                <span className="font-medium">Actions:</span> {rule.actions.length}
-                              </p>
-                              {rule.runCount !== undefined && rule.runCount > 0 && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  <span className="font-medium">Runs:</span> {rule.runCount}
-                                </p>
-                              )}
+                                  {rule.actions.length > 0 && (
+              <Badge className="text-xs font-medium tracking-tight border border-transparent bg-muted text-muted-foreground">
+                                        {rule.actions.length === 1 ? "Action: " : "Actions: "}
+                                        {rule.actions.map((action) => formatActionLabel(action.type)).join(", ")}
+              </Badge>
+            )}
+                                  {rule.runCount !== undefined && rule.runCount > 0 && (
+              <Badge
+                className={cn(
+                  "text-xs font-medium tracking-tight border",
+                  "border-red-500/20 bg-red-500/10 text-red-600",
+                  "dark:border-red-400/30 dark:bg-red-500/20 dark:text-red-200"
+                )}
+              >
+                                        Runs: {rule.runCount}
+              </Badge>
+            )}
+            </div>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Button
@@ -577,24 +686,28 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
                                 onClick={() => handleDeleteRule(rule.id)}
                                 className="h-8 w-8 text-destructive hover:text-destructive"
                                 title="Delete rule"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-    </Card>
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                  </Card>
                       ))}
                     </div>
                   )}
                   
                   {/* Empty State for Active Automations */}
-                  {filteredTemplates.length > 0 && activeRules.length === 0 && (
+                  {!showTemplateSection && filteredRules.length === 0 && (
                     <div className="mt-8 p-6 rounded-lg border-2 border-dashed bg-muted/20">
                       <div className="text-center">
                         <CheckCircle2 className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                        <h4 className="font-medium mb-1">No active automations yet</h4>
+                        <h4 className="font-medium mb-1">
+                          {activeTab === "rules-inactive" ? "No inactive automations" : "No active automations yet"}
+                        </h4>
                         <p className="text-sm text-muted-foreground mb-4">
-                          Select a template above or create a custom automation to get started
+                          {showTemplateSection
+                            ? "Select a template above or create a custom automation to get started"
+                            : "Toggle automations to change their active status"}
                         </p>
                       </div>
                     </div>
@@ -608,10 +721,26 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
 
       {/* Rule Editor Dialog */}
       <RuleEditorDialog
-        rule={editingRule}
-        isOpen={editingRuleId !== null}
-        onClose={() => setEditingRuleId(null)}
+        rule={ruleForEditor}
+        isOpen={isRuleEditorOpen}
+        onClose={() => {
+          setTemplateDraft(null)
+          setEditingRuleId(null)
+        }}
         onSave={updateRule}
+        onCreate={(payload: Omit<AutomationRule, "id" | "runCount" | "lastRun">) => {
+          const newRuleId = addRule(payload)
+          console.log("Automation rule created successfully from template!", newRuleId)
+
+          // Scroll to active automations section after a short delay
+          setTimeout(() => {
+            const activeRulesSection = document.querySelector('[data-active-rules]')
+            if (activeRulesSection) {
+              activeRulesSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+            }
+          }, 100)
+        }}
+        mode={templateDraft ? "create" : "edit"}
         boardId={boardId}
       />
     </>
