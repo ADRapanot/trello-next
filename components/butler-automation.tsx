@@ -42,6 +42,58 @@ const formatActionLabel = (actionType: AutomationAction["type"]) =>
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ")
 
+const DAY_OF_WEEK_LABELS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const
+
+const formatScheduleSummary = (schedule?: AutomationRule["schedule"]) => {
+  if (!schedule) return ""
+
+  const { frequency, time, dayOfWeek, dayOfMonth } = schedule
+  const timePart = time ? ` at ${time}` : ""
+
+  switch (frequency) {
+    case "daily":
+      return `Daily${timePart}`
+    case "weekly": {
+      const resolvedDay = typeof dayOfWeek === "number" ? DAY_OF_WEEK_LABELS[dayOfWeek] ?? DAY_OF_WEEK_LABELS[1] : DAY_OF_WEEK_LABELS[1]
+      return `Weekly on ${resolvedDay}${timePart}`
+    }
+    case "monthly": {
+      const resolvedDayOfMonth = typeof dayOfMonth === "number" && dayOfMonth > 0 ? dayOfMonth : 1
+      return `Monthly on day ${resolvedDayOfMonth}${timePart}`
+    }
+    default:
+      return ""
+  }
+}
+
+const formatDueDateTriggerSummary = (trigger?: AutomationRule["dueDateTrigger"]) => {
+  if (!trigger) return ""
+
+  const { type, value, unit } = trigger
+  const resolvedValue = typeof value === "number" ? value : 0
+  const unitLabel = unit === "hours" ? "hour" : "day"
+  const pluralizedUnit = resolvedValue === 1 ? unitLabel : `${unitLabel}s`
+
+  switch (type) {
+    case "before":
+      return `${resolvedValue} ${pluralizedUnit} before due`
+    case "after":
+      return `${resolvedValue} ${pluralizedUnit} after due`
+    case "on":
+      return "On due date"
+    default:
+      return ""
+  }
+}
+
 interface ButlerAutomationProps {
   boardId?: string
 }
@@ -98,7 +150,30 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
         rule.trigger ? formatTriggerLabel(rule.trigger as AutomationTriggerType) : "",
         ...(rule.conditions?.map((condition) => `${condition.field} ${condition.operator} ${condition.value}`) ?? []),
         ...rule.actions.map((action) => `${action.type} ${action.value}`),
+        formatScheduleSummary(rule.schedule),
+        formatDueDateTriggerSummary(rule.dueDateTrigger),
       ]
+
+      if (rule.schedule) {
+        fields.push(
+          `schedule ${rule.schedule.frequency}`,
+          rule.schedule.time ?? "",
+        )
+        if (typeof rule.schedule.dayOfWeek === "number") {
+          fields.push(DAY_OF_WEEK_LABELS[rule.schedule.dayOfWeek] ?? "")
+        }
+        if (typeof rule.schedule.dayOfMonth === "number") {
+          fields.push(rule.schedule.dayOfMonth.toString())
+        }
+      }
+
+      if (rule.dueDateTrigger) {
+        fields.push(
+          `due-date ${rule.dueDateTrigger.type}`,
+          rule.dueDateTrigger.unit,
+          (rule.dueDateTrigger.value ?? "").toString(),
+        )
+      }
 
       return fields.some((field) => field.toLowerCase().includes(query))
     },
@@ -374,6 +449,7 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
         type === "scheduled"
           ? {
               frequency: "daily",
+              time: "09:00",
             }
           : undefined,
     }
@@ -543,7 +619,8 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
                               unit: "days"
                             } : undefined,
                             schedule: activeTab === "scheduled" ? {
-                              frequency: "daily"
+                              frequency: "daily",
+                              time: "09:00"
                             } : undefined,
                           }
                           
@@ -641,6 +718,16 @@ export function ButlerAutomation({ boardId = "1" }: ButlerAutomationProps) {
               <Badge className="text-xs font-medium tracking-tight border border-transparent bg-muted text-muted-foreground">
                                         {rule.actions.length === 1 ? "Action: " : "Actions: "}
                                         {rule.actions.map((action) => formatActionLabel(action.type)).join(", ")}
+              </Badge>
+            )}
+                                  {rule.type === "scheduled" && formatScheduleSummary(rule.schedule) && (
+              <Badge className="text-xs font-medium tracking-tight border border-transparent bg-muted text-muted-foreground">
+                                        {formatScheduleSummary(rule.schedule)}
+              </Badge>
+            )}
+                                  {rule.type === "due-date" && formatDueDateTriggerSummary(rule.dueDateTrigger) && (
+              <Badge className="text-xs font-medium tracking-tight border border-transparent bg-muted text-muted-foreground">
+                                        {formatDueDateTriggerSummary(rule.dueDateTrigger)}
               </Badge>
             )}
                                   {rule.runCount !== undefined && rule.runCount > 0 && (
