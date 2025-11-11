@@ -6,6 +6,7 @@ import type { ReactNode } from "react"
 import type { Activity, ActivityNotification, Card, Comment, List } from "@/store/types"
 import { ActivityHelpers } from "@/lib/activity-helpers"
 import { buildNotificationsFromActivities, mergeActivitiesWithNotifications } from "@/lib/notification-helpers"
+import { INITIAL_BOARDS } from "@/store/boards-store"
 
 // Default user for activity logging (can be replaced with real user context later)
 const DEFAULT_USER = {
@@ -246,6 +247,148 @@ const createEmptyBoardState = (): BoardKanbanState => ({
   labels: [],
 })
 
+const cloneBoardState = (state: BoardKanbanState): BoardKanbanState => ({
+  lists: cloneLists(state.lists),
+  archivedCards: state.archivedCards.map((card) => ({ ...card })),
+  archivedLists: cloneLists(state.archivedLists),
+  activities: state.activities.map((activity) => ({
+    ...activity,
+    timestamp: new Date(activity.timestamp),
+  })),
+  notifications: state.notifications.map((notification) => ({
+    ...notification,
+    timestamp: new Date(notification.timestamp),
+  })),
+  labels: [...state.labels],
+})
+
+const createActivity = (
+  id: string,
+  type: Activity["type"],
+  user: Activity["user"],
+  minutesAgo: number,
+  details: Activity["details"],
+): Activity => ({
+  id,
+  type,
+  user,
+  timestamp: new Date(Date.now() - minutesAgo * 60 * 1000),
+  details,
+})
+
+const BOARD_ACTIVITY_SEED_FACTORIES: Record<string, () => Activity[]> = {
+  "2": () => [
+    createActivity("marketing-1", "card_created", { name: "Lisa Brown", avatar: "LB" }, 7, {
+      description: "added content task",
+      itemName: "Launch email draft",
+      to: "Content Calendar",
+    }),
+    createActivity("marketing-2", "card_moved", { name: "Tom Rivera", avatar: "TR" }, 24, {
+      description: "moved deliverable",
+      itemName: "Paid social concepts",
+      from: "Ideas",
+      to: "In Production",
+    }),
+    createActivity("marketing-3", "due_date_added", { name: "Mia Patel", avatar: "MP" }, 180, {
+      description: "scheduled milestone",
+      itemName: "Landing page hero refresh",
+      to: "Jan 15, 2025",
+    }),
+  ],
+  "3": () => [
+    createActivity("design-1", "list_created", { name: "Emily Chen", avatar: "EC" }, 12, {
+      description: "added component area",
+      itemName: "Typography Guidelines",
+    }),
+    createActivity("design-2", "card_description_changed", { name: "Noah Gray", avatar: "NG" }, 38, {
+      description: "updated design spec",
+      itemName: "Primary button states",
+    }),
+    createActivity("design-3", "comment_added", { name: "Priya Singh", avatar: "PS" }, 95, {
+      description: "shared feedback",
+      to: "Iconography clean-up",
+    }),
+  ],
+  "4": () => [
+    createActivity("sprint-1", "card_moved", { name: "Jason Lee", avatar: "JL" }, 5, {
+      description: "pulled story into sprint",
+      itemName: "Integrate analytics events",
+      from: "Backlog",
+      to: "Sprint 12",
+    }),
+    createActivity("sprint-2", "checklist_item_completed", { name: "Hannah Kim", avatar: "HK" }, 48, {
+      description: "completed grooming task",
+      itemName: "Clarify acceptance criteria",
+      to: "Sprint Health Checklist",
+    }),
+    createActivity("sprint-3", "list_created", { name: "Carlos Vega", avatar: "CV" }, 130, {
+      description: "created sprint lane",
+      itemName: "Sprint Retro Ideas",
+    }),
+  ],
+  "5": () => [
+    createActivity("feedback-1", "card_created", { name: "Ava Thompson", avatar: "AT" }, 9, {
+      description: "logged customer insight",
+      itemName: "Improve onboarding checklist",
+      to: "Feedback Triage",
+    }),
+    createActivity("feedback-2", "comment_added", { name: "Leo Martinez", avatar: "LM" }, 42, {
+      description: "added follow-up note",
+      to: "Streamline billing flow",
+    }),
+    createActivity("feedback-3", "label_added", { name: "Grace Wu", avatar: "GW" }, 210, {
+      description: "prioritized feedback",
+      itemName: "High Impact",
+      to: "Clarify reporting tab",
+    }),
+  ],
+  "6": () => [
+    createActivity("resources-1", "attachment_added", { name: "Morgan Reed", avatar: "MR" }, 14, {
+      description: "shared template",
+      itemName: "Team charter doc",
+      to: "Onboarding Resources",
+    }),
+    createActivity("resources-2", "member_added", { name: "Ethan Cole", avatar: "EC" }, 55, {
+      description: "added collaborator",
+      itemName: "Samira Ali",
+      to: "Mentorship Pairings",
+    }),
+    createActivity("resources-3", "card_updated", { name: "Riley Green", avatar: "RG" }, 160, {
+      description: "refreshed resource",
+      itemName: "Laptop provisioning guide",
+    }),
+  ],
+}
+
+const createInitialStateForBoard = (boardId: string): BoardKanbanState => {
+  if (boardId === "1") {
+    return cloneBoardState(defaultBoardState)
+  }
+
+  const seedFactory = BOARD_ACTIVITY_SEED_FACTORIES[boardId]
+  const activities = seedFactory ? seedFactory() : []
+
+  return {
+    ...createEmptyBoardState(),
+    activities,
+    notifications: buildNotificationsFromActivities(activities).map((notification) => ({
+      ...notification,
+      read: true,
+    })),
+    labels: [],
+  }
+}
+
+const buildInitialKanbanState = (): KanbanState => {
+  const initialState: KanbanState = {}
+
+  INITIAL_BOARDS.forEach((board) => {
+    initialState[board.id] = createInitialStateForBoard(board.id)
+  })
+
+  return initialState
+}
+
 const cloneComments = (comments?: Comment[]): Comment[] => {
   if (!comments) return []
   return comments.map((comment) => {
@@ -340,28 +483,11 @@ const replaceBoardActivities = (current: BoardKanbanState, activities: Activity[
 const KanbanStoreContext = createContext<KanbanStoreValue | undefined>(undefined)
 
 export function KanbanStoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<KanbanState>({
-    "1": defaultBoardState,
-  })
-
-  const ensureBoard = useCallback(
-    (boardId: string) => {
-      if (!boardId) return createEmptyBoardState()
-      if (!state[boardId]) {
-        setState((prev) => {
-          if (prev[boardId]) return prev
-          return { ...prev, [boardId]: createEmptyBoardState() }
-        })
-        return createEmptyBoardState()
-      }
-      return state[boardId]
-    },
-    [state],
-  )
+  const [state, setState] = useState<KanbanState>(() => buildInitialKanbanState())
 
   const setBoardState = useCallback((boardId: string, updater: (current: BoardKanbanState) => BoardKanbanState) => {
     setState((prev) => {
-      const current = prev[boardId] ?? createEmptyBoardState()
+      const current = prev[boardId] ?? createInitialStateForBoard(boardId)
       const next = updater(current)
       if (next === current) return prev
       return { ...prev, [boardId]: next }
@@ -718,47 +844,121 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
         const activityUser = resolveActivityUser(options)
         
         if (canLogActivities) {
+          const changedKeys = new Set<string>()
+          const inspectedNoChange = new Set<string>()
+          const markChanged = (key: string) => {
+            if (key) changedKeys.add(key)
+          }
+          const markNoChange = (key: string) => {
+            if (key) inspectedNoChange.add(key)
+          }
+
           // Check for title change
-          if (updatedCard.title && updatedCard.title !== existingCard.title) {
-            activities.push(ActivityHelpers.cardRenamed(activityUser, existingCard.title, updatedCard.title))
+          if (updatedCard.title !== undefined) {
+            if (updatedCard.title !== existingCard.title) {
+              markChanged("title")
+              activities.push(ActivityHelpers.cardRenamed(activityUser, existingCard.title, updatedCard.title))
+            } else {
+              markNoChange("title")
+            }
           }
           
           // Check for description change
-          if (updatedCard.description !== undefined && updatedCard.description !== existingCard.description) {
-            activities.push(ActivityHelpers.cardDescriptionChanged(activityUser, mergedCard.title))
+          if (updatedCard.description !== undefined) {
+            if (updatedCard.description !== existingCard.description) {
+              markChanged("description")
+              activities.push(ActivityHelpers.cardDescriptionChanged(activityUser, mergedCard.title))
+            } else {
+              markNoChange("description")
+            }
           }
           
           // Check for due date changes
           if (updatedCard.dueDate !== undefined) {
             if (!existingCard.dueDate && updatedCard.dueDate) {
+              markChanged("dueDate")
               activities.push(ActivityHelpers.dueDateAdded(activityUser, mergedCard.title, updatedCard.dueDate))
             } else if (existingCard.dueDate && !updatedCard.dueDate) {
+              markChanged("dueDate")
               activities.push(ActivityHelpers.dueDateRemoved(activityUser, mergedCard.title))
             } else if (
               existingCard.dueDate &&
               updatedCard.dueDate &&
               existingCard.dueDate !== updatedCard.dueDate
             ) {
+              markChanged("dueDate")
               activities.push(
                 ActivityHelpers.dueDateChanged(activityUser, mergedCard.title, existingCard.dueDate, updatedCard.dueDate),
               )
+            } else {
+              markNoChange("dueDate")
             }
           }
 
           // Check for start date changes
           if (updatedCard.startDate !== undefined) {
             if (!existingCard.startDate && updatedCard.startDate) {
+              markChanged("startDate")
               activities.push(ActivityHelpers.startDateAdded(activityUser, mergedCard.title, updatedCard.startDate))
             } else if (existingCard.startDate && !updatedCard.startDate) {
+              markChanged("startDate")
               activities.push(ActivityHelpers.startDateRemoved(activityUser, mergedCard.title))
             } else if (
               existingCard.startDate &&
               updatedCard.startDate &&
               existingCard.startDate !== updatedCard.startDate
             ) {
+              markChanged("startDate")
               activities.push(
                 ActivityHelpers.startDateChanged(activityUser, mergedCard.title, existingCard.startDate, updatedCard.startDate),
               )
+            } else {
+              markNoChange("startDate")
+            }
+          }
+
+          // Check for label changes
+          if (updatedCard.labels !== undefined) {
+            const previousLabels = Array.from(new Set(existingCard.labels ?? []))
+            const nextLabels = Array.from(new Set(updatedCard.labels ?? []))
+
+            const addedLabels = nextLabels.filter((label) => !previousLabels.includes(label))
+            const removedLabels = previousLabels.filter((label) => !nextLabels.includes(label))
+
+            if (addedLabels.length || removedLabels.length) {
+              markChanged("labels")
+              addedLabels.forEach((label) => {
+                activities.push(ActivityHelpers.labelAdded(activityUser, mergedCard.title, label))
+              })
+              removedLabels.forEach((label) => {
+                activities.push(ActivityHelpers.labelRemoved(activityUser, mergedCard.title, label))
+              })
+            } else {
+              markNoChange("labels")
+            }
+          }
+
+          // Check for member changes
+          if (updatedCard.members !== undefined) {
+            const previousMembers = existingCard.members ?? []
+            const nextMembers = updatedCard.members ?? []
+
+            const previousMemberIds = new Set(previousMembers.map((member) => member.id))
+            const nextMemberIds = new Set(nextMembers.map((member) => member.id))
+
+            const addedMembers = nextMembers.filter((member) => !previousMemberIds.has(member.id))
+            const removedMembers = previousMembers.filter((member) => !nextMemberIds.has(member.id))
+
+            if (addedMembers.length || removedMembers.length) {
+              markChanged("members")
+              addedMembers.forEach((member) => {
+                activities.push(ActivityHelpers.memberAdded(activityUser, mergedCard.title, member.name))
+              })
+              removedMembers.forEach((member) => {
+                activities.push(ActivityHelpers.memberRemoved(activityUser, mergedCard.title, member.name))
+              })
+            } else {
+              markNoChange("members")
             }
           }
 
@@ -787,11 +987,19 @@ export function KanbanStoreProvider({ children }: { children: ReactNode }) {
           }
 
           // If no specific activities created, create a generic update activity
-          const hasNonCommentUpdates = Object.keys(updatedCard).some((key) => key !== "comments")
-          if (activities.length === 0 && hasNonCommentUpdates) {
-            const changeKeys = Object.keys(updatedCard).filter((key) => key !== "comments")
-            const changes = changeKeys.join(", ")
-            activities.push(ActivityHelpers.cardUpdated(activityUser, mergedCard.title, changes))
+          if (activities.length === 0) {
+            const explicitKeys = Array.from(changedKeys).filter((key) => key !== "comments")
+            const fallbackKeys =
+              explicitKeys.length > 0
+                ? explicitKeys
+                : Object.keys(updatedCard).filter(
+                    (key) => key !== "comments" && !inspectedNoChange.has(key),
+                  )
+
+            if (fallbackKeys.length > 0) {
+              const changes = fallbackKeys.join(", ")
+              activities.push(ActivityHelpers.cardUpdated(activityUser, mergedCard.title, changes))
+            }
           }
         }
 

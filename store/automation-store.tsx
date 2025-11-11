@@ -48,15 +48,29 @@ export interface AutomationRule {
   runCount?: number
 }
 
+export type AutomationTriggerType = NonNullable<AutomationRule["trigger"]>
+
+export const defaultTriggerStyles: Record<AutomationTriggerType, string> = {
+  "card-created": "bg-blue-500/10 text-blue-600 border-blue-500/20 dark:bg-blue-500/20 dark:text-blue-200 dark:border-blue-400/30",
+  "card-moved": "bg-purple-500/10 text-purple-600 border-purple-500/20 dark:bg-purple-500/20 dark:text-purple-200 dark:border-purple-400/30",
+  "label-added": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-200 dark:border-emerald-400/30",
+  "label-removed": "bg-rose-500/10 text-rose-600 border-rose-500/20 dark:bg-rose-500/20 dark:text-rose-200 dark:border-rose-400/30",
+  "member-added": "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-200 dark:border-amber-400/30",
+  "member-removed": "bg-red-500/10 text-red-600 border-red-500/20 dark:bg-red-500/20 dark:text-red-200 dark:border-red-400/30",
+  "due-date-set": "bg-sky-500/10 text-sky-600 border-sky-500/20 dark:bg-sky-500/20 dark:text-sky-200 dark:border-sky-400/30",
+  "card-completed": "bg-green-500/10 text-green-600 border-green-500/20 dark:bg-green-500/20 dark:text-green-200 dark:border-green-400/30",
+}
+
 interface AutomationStore {
   rules: AutomationRule[]
+  triggerStyles: Record<AutomationTriggerType, string>
   
   // Activity logging callback
   activityLogger?: (boardId: string, activity: Activity) => void
   setActivityLogger: (logger: (boardId: string, activity: Activity) => void) => void
   
   // Rule management
-  addRule: (rule: Omit<AutomationRule, "id" | "runCount" | "lastRun">) => void
+  addRule: (rule: Omit<AutomationRule, "id" | "runCount" | "lastRun">) => string
   updateRule: (id: string, updates: Partial<AutomationRule>) => void
   deleteRule: (id: string) => void
   toggleRule: (id: string) => void
@@ -64,6 +78,8 @@ interface AutomationStore {
   // Get rules
   getRulesByBoard: (boardId: string) => AutomationRule[]
   getActiveRules: (boardId: string, type?: AutomationRule["type"]) => AutomationRule[]
+  setTriggerStyle: (trigger: AutomationTriggerType, className: string) => void
+  setTriggerStyles: (styles: Partial<Record<AutomationTriggerType, string>>) => void
   
   // Rule execution
   executeRule: (ruleId: string) => void
@@ -76,6 +92,7 @@ export const useAutomationStore = create<AutomationStore>()(
   persist(
     (set, get) => ({
       rules: [],
+      triggerStyles: defaultTriggerStyles,
       activityLogger: undefined,
       
       setActivityLogger: (logger) => {
@@ -108,7 +125,9 @@ export const useAutomationStore = create<AutomationStore>()(
             rules: newRules,
           }
         })
-        console.log("Rules after add:", get().rules)
+        const rulesAfterAdd = get().rules
+        console.log("Rules after add:", rulesAfterAdd)
+        return newRule.id
       },
       
       updateRule: (id, updates) => {
@@ -200,6 +219,24 @@ export const useAutomationStore = create<AutomationStore>()(
       
       clearAllRules: () => {
         set({ rules: [] })
+      },
+      
+      setTriggerStyle: (trigger, className) => {
+        set((state) => ({
+          triggerStyles: {
+            ...(state.triggerStyles ?? defaultTriggerStyles),
+            [trigger]: className,
+          },
+        }))
+      },
+      
+      setTriggerStyles: (styles) => {
+        set((state) => ({
+          triggerStyles: {
+            ...(state.triggerStyles ?? defaultTriggerStyles),
+            ...styles,
+          },
+        }))
       },
     }),
     {

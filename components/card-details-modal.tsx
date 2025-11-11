@@ -335,16 +335,18 @@ export function CardDetailsModal({
 
   const [newItemTexts, setNewItemTexts] = useState<{ [key: string]: string }>({})
 
-  const toggleLabel = (labelName: string) => {
-    setSelectedLabels((prev) => {
-      const isSelected = prev.includes(labelName)
-      const newLabels = isSelected 
-        ? prev.filter((l) => l !== labelName) 
-        : [...prev, labelName]
-      // Deduplicate before returning
-      return Array.from(new Set(newLabels))
-    })
-  }
+  const toggleLabel = useCallback(
+    (labelName: string) => {
+      const isSelected = selectedLabels.includes(labelName)
+      const nextLabels = isSelected
+        ? selectedLabels.filter((l) => l !== labelName)
+        : [...selectedLabels, labelName]
+      const deduped = Array.from(new Set(nextLabels))
+      setSelectedLabels(deduped)
+      commitUpdate({ labels: deduped })
+    },
+    [selectedLabels, commitUpdate],
+  )
 
   const addChecklistItem = (checklistId: string, text: string) => {
     updateChecklists((prev) =>
@@ -955,7 +957,11 @@ export function CardDetailsModal({
                           variant="ghost"
                           size="icon"
                           className="h-4 w-4 p-0"
-                          onClick={() => setSelectedMembers(selectedMembers.filter((m) => m.id !== member.id))}
+                          onClick={() => {
+                            const updatedMembers = selectedMembers.filter((m) => m.id !== member.id)
+                            setSelectedMembers(updatedMembers)
+                            commitUpdate({ members: updatedMembers })
+                          }}
                         >
                           <X className="h-3 w-3" />
                         </Button>

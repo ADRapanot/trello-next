@@ -97,7 +97,7 @@ export function KanbanList({
       
       // ALWAYS trigger automation when dropping on the list container
       // This catches drops in empty space between cards
-      if (!monitor.didDrop()) {
+      if (!monitor.didDrop() || !item.dropHandled) {
         const fromListId = item.originalListId || item.listId
         console.log('🎯 KanbanList DROP - Processing:', {
           cardId: item.id,

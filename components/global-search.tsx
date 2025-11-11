@@ -229,7 +229,7 @@ export function GlobalSearch() {
         </PopoverTrigger>
 
         <PopoverContent
-          className="w-[400px] p-0"
+          className="w-[450px] p-0"
           align="start"
           side="bottom"
           onOpenAutoFocus={(e) => e.preventDefault()}
