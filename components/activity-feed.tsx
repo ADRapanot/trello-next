@@ -330,6 +330,63 @@ const defaultActivities: Activity[] = [
   },
 ]
 
+const filterOptions: { label: string; types: ActivityType[] }[] = [
+  { label: "All", types: [] },
+  {
+    label: "Card Actions",
+    types: [
+      "card_created",
+      "card_moved",
+      "card_updated",
+      "card_renamed",
+      "card_archived",
+      "card_restored",
+      "card_deleted",
+      "card_copied",
+      "card_description_changed",
+    ],
+  },
+  {
+    label: "List Actions",
+    types: ["list_created", "list_renamed", "list_moved", "list_copied", "list_archived", "cards_moved_all"],
+  },
+  {
+    label: "Labels",
+    types: ["label_added", "label_removed", "label_renamed", "label_deleted"],
+  },
+  {
+    label: "Members",
+    types: ["member_added", "member_removed"],
+  },
+  {
+    label: "Attachments",
+    types: ["attachment_added", "attachment_removed"],
+  },
+  {
+    label: "Checklists",
+    types: [
+      "checklist_added",
+      "checklist_removed",
+      "checklist_item_added",
+      "checklist_item_completed",
+      "checklist_item_uncompleted",
+      "checklist_item_deleted",
+    ],
+  },
+  {
+    label: "Comments",
+    types: ["comment_added", "comment_edited", "comment_deleted"],
+  },
+  {
+    label: "Dates",
+    types: ["due_date_added", "due_date_changed", "due_date_removed", "start_date_added", "start_date_changed", "start_date_removed"],
+  },
+  {
+    label: "Automations",
+    types: ["automation_triggered", "automation_rule_created", "automation_rule_enabled", "automation_rule_disabled", "automation_rule_deleted"],
+  },
+]
+
 export function ActivityFeed({ boardId, activities: activitiesProp }: ActivityFeedProps) {
   const { getActivities } = useKanbanStore()
   const activities = useMemo(() => {
@@ -343,46 +400,18 @@ export function ActivityFeed({ boardId, activities: activitiesProp }: ActivityFe
   }, [boardId, getActivities, activitiesProp])
   const [selectedFilters, setSelectedFilters] = useState<ActivityType[]>([])
   const [isExpanded, setIsExpanded] = useState(true)
-
-  const filterOptions: { label: string; types: ActivityType[] }[] = [
-    { label: "All", types: [] },
-    { 
-      label: "Card Actions", 
-      types: ["card_created", "card_moved", "card_updated", "card_renamed", "card_archived", "card_restored", "card_deleted", "card_copied", "card_description_changed"] 
-    },
-    { 
-      label: "List Actions", 
-      types: ["list_created", "list_renamed", "list_moved", "list_copied", "list_archived", "cards_moved_all"] 
-    },
-    { 
-      label: "Labels", 
-      types: ["label_added", "label_removed", "label_renamed", "label_deleted"] 
-    },
-    { 
-      label: "Members", 
-      types: ["member_added", "member_removed"] 
-    },
-    { 
-      label: "Attachments", 
-      types: ["attachment_added", "attachment_removed"] 
-    },
-    { 
-      label: "Checklists", 
-      types: ["checklist_added", "checklist_removed", "checklist_item_added", "checklist_item_completed", "checklist_item_uncompleted", "checklist_item_deleted"] 
-    },
-    { 
-      label: "Comments", 
-      types: ["comment_added", "comment_edited", "comment_deleted"] 
-    },
-    { 
-      label: "Dates", 
-      types: ["due_date_added", "due_date_changed", "due_date_removed", "start_date_added", "start_date_changed", "start_date_removed"] 
-    },
-    { 
-      label: "Automations", 
-      types: ["automation_triggered", "automation_rule_created", "automation_rule_enabled", "automation_rule_disabled", "automation_rule_deleted"] 
-    },
-  ]
+  const activeFilterCount = useMemo(() => {
+    if (selectedFilters.length === 0) {
+      return 0
+    }
+    return filterOptions.reduce((count, option) => {
+      if (option.types.length === 0) {
+        return count
+      }
+      return option.types.every((type) => selectedFilters.includes(type)) ? count + 1 : count
+    }, 0)
+  }, [selectedFilters])
+  const badgeCount = activeFilterCount > 0 ? activeFilterCount : selectedFilters.length
 
   const filteredActivities =
     selectedFilters.length === 0 ? activities : activities.filter((activity) => selectedFilters.includes(activity.type))
@@ -412,9 +441,9 @@ export function ActivityFeed({ boardId, activities: activitiesProp }: ActivityFe
             <Button variant="outline" size="sm" className="h-8 bg-transparent">
               <Filter className="h-3 w-3 mr-2" />
               Filter
-              {selectedFilters.length > 0 && (
+              {badgeCount > 0 && (
                 <span className="ml-1 text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5">
-                  {selectedFilters.length}
+                  {badgeCount}
                 </span>
               )}
             </Button>
