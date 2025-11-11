@@ -30,6 +30,30 @@ interface RuleEditorDialogProps {
   mode?: "create" | "edit"
 }
 
+type ScheduleSettings = NonNullable<AutomationRule["schedule"]>
+type DueDateTriggerSettings = NonNullable<AutomationRule["dueDateTrigger"]>
+
+const createDefaultSchedule = (): ScheduleSettings => ({
+  frequency: "daily",
+  time: "09:00",
+})
+
+const createDefaultDueDateTrigger = (): DueDateTriggerSettings => ({
+  type: "before",
+  value: 1,
+  unit: "days",
+})
+
+const DAY_OF_WEEK_OPTIONS = [
+  { value: 0, label: "Sunday" },
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+]
+
 export function RuleEditorDialog({
   rule,
   isOpen,
@@ -44,9 +68,138 @@ export function RuleEditorDialog({
   const [trigger, setTrigger] = useState<AutomationRule["trigger"]>("card-created")
   const [conditions, setConditions] = useState<AutomationCondition[]>([])
   const [actions, setActions] = useState<AutomationAction[]>([])
+  const [schedule, setSchedule] = useState<ScheduleSettings>(() =>
+    rule?.schedule ? { ...rule.schedule } : createDefaultSchedule(),
+  )
+  const [dueDateTriggerState, setDueDateTriggerState] = useState<DueDateTriggerSettings>(
+    () => (rule?.dueDateTrigger ? { ...rule.dueDateTrigger } : createDefaultDueDateTrigger()),
+  )
   const [availableLabels, setAvailableLabels] = useState<string[]>([])
   const [availableLists, setAvailableLists] = useState<Array<{ id: string; title: string }>>([])
   const [availableMembers, setAvailableMembers] = useState<Member[]>([])
+
+  const handleScheduleFrequencyChange = (value: ScheduleSettings["frequency"]) => {
+    setSchedule((prev) => {
+      const next = {
+        ...prev,
+        frequency: value,
+      }
+
+      if (value === "weekly") {
+        next.dayOfWeek = typeof prev.dayOfWeek === "number" ? prev.dayOfWeek : 1
+        next.dayOfMonth = undefined
+      } else if (value === "monthly") {
+        next.dayOfMonth = typeof prev.dayOfMonth === "number" ? prev.dayOfMonth : 1
+        next.dayOfWeek = undefined
+      } else {
+        next.dayOfWeek = undefined
+        next.dayOfMonth = undefined
+      }
+
+      return next
+    })
+  }
+
+  const handleScheduleTimeChange = (value: string) => {
+    setSchedule((prev) => {
+      const base = { ...prev }
+      base.time = value || undefined
+      return base
+    })
+  }
+
+  const handleScheduleDayOfWeekChange = (value: string) => {
+    const parsed = Number(value)
+    setSchedule((prev) => ({
+      ...prev,
+      dayOfWeek: Number.isNaN(parsed) ? 1 : parsed,
+    }))
+  }
+
+  const handleScheduleDayOfMonthChange = (value: string) => {
+    const parsed = Number(value)
+    const clamped = Number.isNaN(parsed) ? 1 : Math.min(31, Math.max(1, parsed))
+    setSchedule((prev) => ({
+      ...prev,
+      dayOfMonth: clamped,
+    }))
+  }
+
+  const handleDueDateTypeChange = (value: DueDateTriggerSettings["type"]) => {
+    setDueDateTriggerState((prev) => {
+      const next = {
+        ...prev,
+        type: value,
+      }
+
+      if (value === "on") {
+        next.value = 0
+      } else if (typeof next.value !== "number" || next.value < 0) {
+        next.value = 0
+      }
+
+      if (!next.unit) {
+        next.unit = "days"
+      }
+
+      return next
+    })
+  }
+
+  const handleDueDateValueChange = (value: number) => {
+    const normalized = Number.isNaN(value) ? 0 : Math.max(0, value)
+    setDueDateTriggerState((prev) => ({
+      ...prev,
+      value: normalized,
+    }))
+  }
+
+  const handleDueDateUnitChange = (value: DueDateTriggerSettings["unit"]) => {
+    setDueDateTriggerState((prev) => ({
+      ...prev,
+      unit: value,
+    }))
+  }
+
+  const getNormalizedSchedule = (): ScheduleSettings => {
+    const normalized: ScheduleSettings = {
+      frequency: schedule.frequency,
+    }
+
+    if (schedule.time) {
+      normalized.time = schedule.time
+    }
+
+    if (schedule.frequency === "weekly" && typeof schedule.dayOfWeek === "number") {
+      normalized.dayOfWeek = schedule.dayOfWeek
+    }
+
+    if (schedule.frequency === "monthly" && typeof schedule.dayOfMonth === "number") {
+      normalized.dayOfMonth = schedule.dayOfMonth
+    }
+
+    return normalized
+  }
+
+  const getNormalizedDueDateTrigger = (): DueDateTriggerSettings => {
+    const trigger = dueDateTriggerState
+    const unit: DueDateTriggerSettings["unit"] = trigger.unit ?? "days"
+    const type: DueDateTriggerSettings["type"] = trigger.type
+
+    if (type === "on") {
+      return {
+        type,
+        value: 0,
+        unit,
+      }
+    }
+
+    return {
+      type,
+      value: Math.max(0, trigger.value ?? 0),
+      unit,
+    }
+  }
 
   // Fetch available labels, lists, and members from the board store
   useEffect(() => {
@@ -93,6 +246,8 @@ export function RuleEditorDialog({
       setTrigger(rule.trigger || "card-created")
       setConditions(rule.conditions || [])
       setActions(rule.actions || [])
+      setSchedule(rule.schedule ? { ...rule.schedule } : createDefaultSchedule())
+      setDueDateTriggerState(rule.dueDateTrigger ? { ...rule.dueDateTrigger } : createDefaultDueDateTrigger())
     }
   }, [rule])
 
@@ -108,8 +263,8 @@ export function RuleEditorDialog({
         trigger: rule.type === "rule" ? trigger : undefined,
         conditions,
         actions,
-        dueDateTrigger: rule.type === "due-date" ? rule.dueDateTrigger : undefined,
-        schedule: rule.type === "scheduled" ? rule.schedule : undefined,
+        dueDateTrigger: rule.type === "due-date" ? getNormalizedDueDateTrigger() : undefined,
+        schedule: rule.type === "scheduled" ? getNormalizedSchedule() : undefined,
       }
 
       onCreate(payload)
@@ -117,12 +272,22 @@ export function RuleEditorDialog({
         description: name,
       })
     } else {
-      onSave(rule.id, {
+      const updates: Partial<AutomationRule> = {
         name,
         trigger: rule.type === "rule" ? trigger : undefined,
         conditions,
         actions,
-      })
+      }
+
+      if (rule.type === "scheduled") {
+        updates.schedule = getNormalizedSchedule()
+      }
+
+      if (rule.type === "due-date") {
+        updates.dueDateTrigger = getNormalizedDueDateTrigger()
+      }
+
+      onSave(rule.id, updates)
 
       toast.success("Automation updated!", {
         description: name,
@@ -214,6 +379,131 @@ export function RuleEditorDialog({
                     <SelectItem value="due-date-set">Due Date Set</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {rule.type === "scheduled" && (
+              <div className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Frequency</Label>
+                    <Select
+                      value={schedule.frequency}
+                      onValueChange={(val) => handleScheduleFrequencyChange(val as ScheduleSettings["frequency"])}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Run at</Label>
+                    <Input
+                      type="time"
+                      value={schedule.time ?? ""}
+                      onChange={(e) => handleScheduleTimeChange(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {schedule.frequency === "weekly" && (
+                  <div className="space-y-2 md:w-64">
+                    <Label>Day of week</Label>
+                    <Select
+                      value={String(schedule.dayOfWeek ?? 1)}
+                      onValueChange={handleScheduleDayOfWeekChange}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select day" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DAY_OF_WEEK_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value.toString()}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {schedule.frequency === "monthly" && (
+                  <div className="space-y-2 md:w-64">
+                    <Label htmlFor="schedule-day-of-month">Day of month</Label>
+                    <Input
+                      id="schedule-day-of-month"
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={schedule.dayOfMonth ?? 1}
+                      onChange={(e) => handleScheduleDayOfMonthChange(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {rule.type === "due-date" && (
+              <div className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-2 md:col-span-1">
+                    <Label>Timing</Label>
+                    <Select
+                      value={dueDateTriggerState.type}
+                      onValueChange={(val) => handleDueDateTypeChange(val as DueDateTriggerSettings["type"])}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select timing" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="before">Before due date</SelectItem>
+                        <SelectItem value="after">After due date</SelectItem>
+                        <SelectItem value="on">On due date</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {(dueDateTriggerState.type === "before" || dueDateTriggerState.type === "after") && (
+                    <>
+                      <div className="space-y-2 md:col-span-1">
+                        <Label htmlFor="due-date-offset">Amount</Label>
+                        <Input
+                          id="due-date-offset"
+                          type="number"
+                          min={0}
+                          value={dueDateTriggerState.value ?? 0}
+                          onChange={(e) => handleDueDateValueChange(Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-1">
+                        <Label>Unit</Label>
+                        <Select
+                          value={dueDateTriggerState.unit ?? "days"}
+                          onValueChange={(val) => handleDueDateUnitChange(val as DueDateTriggerSettings["unit"])}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="days">Days</SelectItem>
+                            <SelectItem value="hours">Hours</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {dueDateTriggerState.type === "on" && (
+                  <p className="text-xs text-muted-foreground">
+                    Automation will run exactly when the due date is reached.
+                  </p>
+                )}
               </div>
             )}
 
