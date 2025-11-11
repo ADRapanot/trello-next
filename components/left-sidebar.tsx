@@ -11,7 +11,7 @@ import { CreateBoardModal } from "@/components/create-board-modal"
 import { EditBoardModal } from "@/components/edit-board-modal"
 import { useBoardStore, type Board } from "@/store/boards-store"
 import { getBoardIcon } from "@/lib/board-icons"
-import { getSidebarSurfaceStyle } from "@/lib/board-backgrounds"
+import { getBoardBackgroundPresentation } from "@/lib/board-backgrounds"
 import { useRouter } from "next/navigation"
 
 interface LeftSidebarProps {
@@ -28,12 +28,21 @@ export function LeftSidebar({ boardBackground }: LeftSidebarProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const router = useRouter()
   const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const sidebarSurface = useMemo(() => getSidebarSurfaceStyle(boardBackground), [boardBackground])
+  const {
+    className: sidebarBackgroundClassName,
+    style: sidebarBackgroundStyle,
+    isImage: isImageBackground,
+  } = useMemo(
+    () => getBoardBackgroundPresentation(boardBackground),
+    [boardBackground],
+  )
 
   return (
     <aside
-      className="w-64 flex-shrink-0 border-r backdrop-blur-xl transition-colors duration-500"
-      style={sidebarSurface}
+      className={`w-64 flex-shrink-0 border-r border-white/20 backdrop-blur-xl transition-colors duration-500 ${
+        isImageBackground ? "bg-slate-950/20" : sidebarBackgroundClassName
+      }`}
+      style={isImageBackground ? undefined : sidebarBackgroundStyle}
     >
       <ScrollArea className="h-full">
         <div className="p-4 space-y-6">

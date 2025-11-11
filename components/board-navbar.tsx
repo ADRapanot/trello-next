@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { ArrowLeft, Star, MoreHorizontal, Image as ImageIcon, Activity as ActivityIcon, Info, Copy, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -17,6 +17,8 @@ import { EditBoardModal } from "@/components/edit-board-modal"
 import { CopyBoardModal } from "@/components/copy-board-modal"
 import { CloseBoardDialog } from "@/components/close-board-dialog"
 import { useBoardStore } from "@/store/boards-store"
+import { getBoardBackgroundPresentation } from "@/lib/board-backgrounds"
+import { defaultGradientBackgroundValue } from "@/store/color-store"
 
 interface BoardNavbarProps {
   boardId?: string
@@ -43,10 +45,23 @@ export function BoardNavbar({
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false)
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false)
   const { getBoardById, updateBoard } = useBoardStore()
+  const {
+    className: navbarBackgroundClassName,
+    style: navbarBackgroundStyle,
+    isImage: isImageBackground,
+  } = useMemo(
+    () => getBoardBackgroundPresentation(boardBackground),
+    [boardBackground],
+  )
   const board = boardId ? (getBoardById(boardId) ?? null) : null
   const resolvedTitle = boardTitle ?? "Product Roadmap"
   return (
-    <nav className="border-b border-white/20 bg-black/10 backdrop-blur-sm">
+    <nav
+      className={`border-b border-white/20 backdrop-blur-sm transition-colors duration-500 ${
+        isImageBackground ? "bg-slate-950/20" : navbarBackgroundClassName
+      }`}
+      style={isImageBackground ? undefined : navbarBackgroundStyle}
+    >
       <div className="px-4 py-3 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Link href="/">
@@ -110,7 +125,7 @@ export function BoardNavbar({
           <BoardBackgroundSelector
             isOpen={isBackgroundSelectorOpen}
             onClose={() => setIsBackgroundSelectorOpen(false)}
-            currentBackground={boardBackground || "bg-gradient-to-br from-blue-500 to-blue-700"}
+            currentBackground={boardBackground || defaultGradientBackgroundValue}
             onBackgroundChange={onBackgroundChange}
           />
         )}

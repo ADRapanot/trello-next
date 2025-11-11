@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useParams } from "next/navigation"
 import { DndWrapper } from "@/components/dnd-wrapper"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -10,6 +10,8 @@ import { LeftSidebar } from "@/components/left-sidebar"
 import { useBoardStore } from "@/store/boards-store"
 import { useKanbanStore } from "@/store/kanban-store"
 import { useAutomationStore } from "@/store/automation-store"
+import { getBoardBackgroundPresentation } from "@/lib/board-backgrounds"
+import { defaultGradientBackgroundValue } from "@/store/color-store"
 
 type BoardMember = { id: string; name: string; avatar: string }
 
@@ -27,9 +29,7 @@ export default function BoardPage() {
   const boardId = params?.id
   const { getBoardById, updateBoard } = useBoardStore()
   const board = getBoardById(boardId)
-  const [boardBackground, setBoardBackground] = useState(
-    board?.background ?? "bg-gradient-to-br from-blue-500 to-blue-700",
-  )
+  const [boardBackground, setBoardBackground] = useState(board?.background ?? defaultGradientBackgroundValue)
   const [filters, setFilters] = useState<FilterState>({
     labels: [],
     members: [],
@@ -63,25 +63,10 @@ export default function BoardPage() {
     setAvailableMembers(available.members)
   }, [])
 
-  // Determine if background is a CSS class or image URL
-  const getBackgroundStyle = () => {
-    if (boardBackground.startsWith("url(")) {
-      return {
-        backgroundImage: boardBackground,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-      }
-    }
-    return {}
-  }
-
-  const getBackgroundClassName = () => {
-    if (boardBackground.startsWith("url(")) {
-      return ""
-    }
-    return boardBackground
-  }
+  const { className: boardBackgroundClassName, style: boardBackgroundStyle } = useMemo(
+    () => getBoardBackgroundPresentation(boardBackground),
+    [boardBackground],
+  )
 
   if (!boardId || !board) {
     return (
@@ -96,10 +81,7 @@ export default function BoardPage() {
   return (
     <ThemeProvider>
       <DndWrapper>
-        <div
-          className={`min-h-screen flex flex-col ${getBackgroundClassName()}`}
-          style={getBackgroundStyle()}
-        >
+        <div className={`min-h-screen flex flex-col ${boardBackgroundClassName}`} style={boardBackgroundStyle}>
           <BoardNavbar
             boardId={boardId}
             boardTitle={board.title}
