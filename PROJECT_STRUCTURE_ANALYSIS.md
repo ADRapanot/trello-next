@@ -144,7 +144,7 @@ trello-clone-v30/
 - **Local State**: Primarily uses `useState` for component-level state
 - **Context API**: Theme management via `ThemeProvider`
 - **Props Drilling**: State passed down through component hierarchy
-- **No Global State Library**: No Redux, Zustand, or similar (state is component-local)
+- **Global State Library**: Use Zustand
 
 ### 4. **Data Flow**
 
