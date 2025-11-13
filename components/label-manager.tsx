@@ -253,25 +253,30 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
           </Button>
         )}
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0 fixed z-[100] max-h-[400px]" align="start" side="right" sideOffset={5}>
+      <PopoverContent
+        className="w-80 p-0 fixed z-[100] max-h-[400px] border border-slate-200 rounded-2xl bg-white text-slate-700 shadow-[0_18px_44px_-28px_rgba(15,23,42,0.25)] overflow-hidden"
+        align="start"
+        side="right"
+        sideOffset={5}
+      >
         <div className="flex flex-col max-h-[400px]">
-          <div className="p-3 flex-shrink-0">
+          <div className="p-3.5 flex-shrink-0 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-white">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-sm">Labels</h4>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setOpen(false)}>
+              <h4 className="font-semibold text-sm text-slate-900">Labels</h4>
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-500 hover:bg-slate-100" onClick={() => setOpen(false)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 min-h-0">
-            <div className="space-y-1 pb-3">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-3.5 min-h-0">
+            <div className="space-y-1.5 pb-4">
               {labels.map((label) => {
                 const isSelected = selectedLabels.includes(label.name)
                 const isEditing = editingLabelId === label.id
 
                 return (
-                  <div key={label.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-accent group">
+                  <div key={label.id} className="flex items-center gap-2 p-2.5 rounded-xl border border-transparent hover:border-sky-200 hover:bg-slate-50 group transition-all">
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={() => toggleLabel(label.id)}
@@ -290,13 +295,13 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
                               cancelEditLabel()
                             }
                           }}
-                          className="h-7 text-xs"
+                          className="h-7 text-xs rounded-md border-slate-200"
                           autoFocus
                         />
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 flex-shrink-0"
+                          className="h-6 w-6 flex-shrink-0 text-slate-500 hover:bg-slate-100"
                           onClick={() => saveEditLabel(label.id)}
                           disabled={!editingLabelName.trim()}
                         >
@@ -305,7 +310,7 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 flex-shrink-0"
+                          className="h-6 w-6 flex-shrink-0 text-rose-500 hover:bg-rose-100/60"
                           onClick={cancelEditLabel}
                         >
                           <X className="h-3 w-3" />
@@ -314,7 +319,7 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
                     ) : (
                       <>
                         <Badge
-                          className={`${label.color} text-white flex-1 justify-start cursor-pointer hover:opacity-90`}
+                          className={`${label.color} text-white flex-1 justify-start cursor-pointer hover:opacity-90 shadow-sm`}
                           onClick={() => toggleLabel(label.id)}
                           onDoubleClick={(e) => {
                             e.stopPropagation()
@@ -324,11 +329,11 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
                         >
                           {label.name}
                         </Badge>
-                        {isSelected && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
+                        {isSelected && <Check className="h-4 w-4 text-sky-500 flex-shrink-0" />}
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 flex-shrink-0"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 flex-shrink-0 text-rose-500 hover:bg-rose-100/60"
                           onClick={() => deleteLabel(label.id)}
                         >
                           <X className="h-3 w-3" />
@@ -341,18 +346,18 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
             </div>
           </div>
 
-          <div className="flex-shrink-0 px-3 pb-3">
-            <Separator className="mb-3" />
+          <div className="flex-shrink-0 px-3.5 pb-3.5">
+            <Separator className="mb-3 bg-slate-200" />
 
             {!isCreating ? (
-              <Button variant="outline" size="sm" className="w-full bg-transparent" onClick={() => setIsCreating(true)}>
+              <Button variant="outline" size="sm" className="w-full bg-white border-slate-200 text-slate-700 hover:bg-slate-100" onClick={() => setIsCreating(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create new label
               </Button>
             ) : (
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-2 block">Name</label>
+                  <label className="text-xs font-semibold text-slate-500 mb-2 block">Name</label>
                   <Input
                     placeholder="Label name"
                     value={newLabelName}
@@ -366,11 +371,12 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
                       }
                     }}
                     autoFocus
+                    className="rounded-md border-slate-200"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-muted-foreground mb-2 block">Select a color</label>
+                  <label className="text-xs font-semibold text-slate-500 mb-2 block">Select a color</label>
                   <div className="grid grid-cols-5 gap-2">
                     {defaultColors.map((color) => (
                       <button
@@ -389,7 +395,7 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
                 </div>
 
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={createLabel} disabled={!newLabelName.trim()} className="flex-1">
+                  <Button size="sm" onClick={createLabel} disabled={!newLabelName.trim()} className="flex-1 bg-sky-500 hover:bg-sky-600 text-white">
                     Create
                   </Button>
                   <Button
@@ -400,6 +406,7 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
                       setNewLabelName("")
                       setSelectedColor(defaultColors[0])
                     }}
+                    className="flex-1 text-slate-500 hover:bg-slate-100"
                   >
                     Cancel
                   </Button>
