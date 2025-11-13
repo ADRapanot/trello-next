@@ -131,12 +131,14 @@ export function BoardNavbar({
         )}
 
         <Dialog open={isActivityModalOpen} onOpenChange={setIsActivityModalOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Board Activity</DialogTitle>
-              <DialogDescription>Review the latest updates happening across this board.</DialogDescription>
+          <DialogContent className="max-w-3xl border border-slate-200 rounded-[26px] bg-white text-slate-800 shadow-[0_26px_56px_-32px_rgba(15,23,42,0.2)] p-0 overflow-hidden">
+            <DialogHeader className="px-5 pt-5 pb-3 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-white">
+              <DialogTitle className="text-lg font-semibold text-slate-900">Board Activity</DialogTitle>
+              <DialogDescription className="text-sm text-slate-500">
+                Review the latest updates happening across this board.
+              </DialogDescription>
             </DialogHeader>
-            <div className="max-h-[60vh] overflow-y-auto pr-1">
+            <div className="max-h-[65vh] overflow-y-auto px-5 pb-5 pt-4">
               <ActivityFeed boardId={boardId} />
             </div>
           </DialogContent>

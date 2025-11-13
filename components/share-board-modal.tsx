@@ -106,27 +106,27 @@ export function ShareBoardModal({ trigger }: ShareBoardModalProps = {}) {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Share Board</DialogTitle>
-          <DialogDescription>Invite team members or generate a shareable link</DialogDescription>
+      <DialogContent className="max-w-2xl border border-slate-200 rounded-[26px] bg-white text-slate-800 shadow-[0_26px_56px_-32px_rgba(15,23,42,0.2)] p-0 overflow-hidden">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-white">
+          <DialogTitle className="text-lg font-semibold text-slate-900">Share Board</DialogTitle>
+          <DialogDescription className="text-sm text-slate-500">Invite team members or generate a shareable link</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-6 px-5 py-5">
           {/* Shareable Link Section */}
           <div className="space-y-3">
             <div>
-              <h3 className="font-semibold text-sm text-foreground mb-2">Shareable Link</h3>
+              <h3 className="font-semibold text-sm text-slate-800 mb-2">Shareable Link</h3>
               <div className="flex gap-2">
                 <div className="flex-1 relative">
-                  <Input value={shareLink} readOnly className="pr-10" />
-                  <Link className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input value={shareLink} readOnly className="pr-10 rounded-xl border-slate-200" />
+                  <Link className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
                 </div>
                 <Button
                   onClick={handleCopyLink}
                   variant="outline"
                   size="sm"
-                  className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950 bg-transparent"
+                  className="border-sky-200 text-sky-700 hover:bg-sky-50 bg-white rounded-xl"
                 >
                   <Copy className="h-4 w-4 mr-2" />
                   {copied ? "Copied!" : "Copy"}
@@ -136,18 +136,18 @@ export function ShareBoardModal({ trigger }: ShareBoardModalProps = {}) {
           </div>
 
           {/* Invite Section */}
-          <div className="space-y-3 border-t pt-6">
-            <h3 className="font-semibold text-sm text-foreground">Invite Members</h3>
+          <div className="space-y-3 border-t border-slate-200 pt-6">
+            <h3 className="font-semibold text-sm text-slate-800">Invite Members</h3>
             <div className="flex gap-2">
               <Input
                 placeholder="Enter email address"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && handleInvite()}
-                className="flex-1"
+                className="flex-1 rounded-xl border-slate-200"
               />
               <Select value={selectedPermission} onValueChange={(value: any) => setSelectedPermission(value)}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-32 rounded-xl border-slate-200">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -156,28 +156,28 @@ export function ShareBoardModal({ trigger }: ShareBoardModalProps = {}) {
                   <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={handleInvite} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button onClick={handleInvite} className="rounded-xl bg-sky-500 hover:bg-sky-600 text-white">
                 Invite
               </Button>
             </div>
           </div>
 
           {/* Members List */}
-          <div className="space-y-3 border-t pt-6">
-            <h3 className="font-semibold text-sm text-foreground mb-3">Members ({members.length})</h3>
+          <div className="space-y-3 border-t border-slate-200 pt-6">
+            <h3 className="font-semibold text-sm text-slate-800 mb-3">Members ({members.length})</h3>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {members.map((member) => (
                 <div
                   key={member.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-900"
+                  className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50"
                 >
                   <div className="flex items-center gap-3 flex-1">
-                    <div className="h-8 w-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-semibold">
+                    <div className="h-8 w-8 rounded-full bg-sky-500 text-white flex items-center justify-center text-xs font-semibold shadow-sm">
                       {member.initials}
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-foreground">{member.name}</p>
-                      <p className="text-xs text-muted-foreground">{member.email}</p>
+                      <p className="text-sm font-medium text-slate-800">{member.name}</p>
+                      <p className="text-xs text-slate-500">{member.email}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -186,7 +186,7 @@ export function ShareBoardModal({ trigger }: ShareBoardModalProps = {}) {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleRemoveMember(member.id)}
-                      className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                      className="h-8 w-8 text-rose-500 hover:bg-rose-100 rounded-full"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -197,8 +197,8 @@ export function ShareBoardModal({ trigger }: ShareBoardModalProps = {}) {
           </div>
         </div>
 
-        <div className="flex gap-2 border-t pt-4 justify-end">
-          <Button variant="outline" onClick={() => setIsOpen(false)}>
+        <div className="flex gap-2 border-t border-slate-200 px-5 py-4 justify-end bg-slate-50">
+          <Button variant="outline" onClick={() => setIsOpen(false)} className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-200">
             Done
           </Button>
         </div>

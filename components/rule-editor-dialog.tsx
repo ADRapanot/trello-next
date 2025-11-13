@@ -11,7 +11,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Plus, X, Trash2, CalendarIcon } from "lucide-react"
 import { AutomationRule, AutomationCondition, AutomationAction } from "@/store/automation-store"
 import { Card } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { DateInput } from "@/components/ui/date-input"
 import { MembersManager, type Member } from "@/components/members-manager"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -77,6 +76,11 @@ export function RuleEditorDialog({
   const [availableLabels, setAvailableLabels] = useState<string[]>([])
   const [availableLists, setAvailableLists] = useState<Array<{ id: string; title: string }>>([])
   const [availableMembers, setAvailableMembers] = useState<Member[]>([])
+
+  const inputClass =
+    "h-10 rounded-xl border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-sky-400"
+  const selectTriggerClass =
+    "h-10 rounded-xl border-slate-200 bg-white text-slate-900 focus:ring-0 focus-visible:ring-1 focus-visible:ring-sky-400"
 
   const handleScheduleFrequencyChange = (value: ScheduleSettings["frequency"]) => {
     setSchedule((prev) => {
@@ -342,56 +346,91 @@ export function RuleEditorDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b">
-          <DialogTitle>Edit Automation Rule</DialogTitle>
+      <DialogContent
+        className="max-w-3xl p-0 gap-0 border border-slate-200 rounded-[30px] shadow-[0_32px_64px_-36px_rgba(15,23,42,0.28)] bg-white text-slate-900 overflow-hidden flex flex-col max-h-[90vh]"
+      >
+        <DialogHeader className="relative px-6 pt-6 pb-4 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-white">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.25),transparent_60%)]" />
+          <div className="relative flex items-center justify-between gap-3">
+            <div>
+              <DialogTitle className="text-xl font-semibold text-slate-900">
+                {mode === "create" ? "Create Automation Rule" : "Edit Automation Rule"}
+              </DialogTitle>
+              <p className="mt-1 text-xs text-slate-500">
+                Fine-tune triggers, conditions, and actions for this board&apos;s workflow.
+              </p>
+            </div>
+            <Badge className="rounded-full bg-sky-100 px-3 py-1 text-[11px] uppercase tracking-[0.28em] text-sky-700 border border-sky-200">
+              {mode === "create" ? "New" : "Editing"}
+            </Badge>
+          </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-6 py-4">
-          <div className="space-y-6">
+        <ScrollArea className="flex-1 px-6 py-5 pr-1 text-slate-700">
+          <div className="space-y-4">
             {/* Rule Name */}
-            <div className="space-y-2">
-              <Label htmlFor="rule-name">Rule Name</Label>
-              <Input
-                id="rule-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter rule name..."
-              />
+            <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_24px_48px_-28px_rgba(15,23,42,0.12)] space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Basics</p>
+                  <h3 className="text-sm font-semibold text-slate-900">Rule Details</h3>
+                </div>
+                <Badge className="rounded-full bg-slate-100 px-3 py-1 text-[11px] uppercase tracking-[0.28em] text-slate-700 border border-slate-200">
+                  {rule.type.replace("-", " ")}
+                </Badge>
+              </div>
+              <div className="space-y-2.5">
+                <Label htmlFor="rule-name" className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                  Rule Name
+                </Label>
+                <Input
+                  id="rule-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter rule name..."
+                  className={inputClass}
+                />
+              </div>
+
+              {/* Trigger (only for rule type) */}
+              {rule.type === "rule" && (
+                <div className="space-y-2.5">
+                  <Label htmlFor="trigger" className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    Trigger
+                  </Label>
+                  <Select value={trigger} onValueChange={(val) => setTrigger(val as AutomationRule["trigger"])}>
+                    <SelectTrigger id="trigger" className={`${selectTriggerClass} w-full`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="card-created">Card Created</SelectItem>
+                      <SelectItem value="card-moved">Card Moved</SelectItem>
+                      <SelectItem value="label-added">Label Added</SelectItem>
+                      <SelectItem value="label-removed">Label Removed</SelectItem>
+                      <SelectItem value="member-added">Member Added</SelectItem>
+                      <SelectItem value="member-removed">Member Removed</SelectItem>
+                      <SelectItem value="card-completed">Card Completed</SelectItem>
+                      <SelectItem value="due-date-set">Due Date Set</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
-            {/* Trigger (only for rule type) */}
-            {rule.type === "rule" && (
-              <div className="space-y-2">
-                <Label htmlFor="trigger">Trigger</Label>
-                <Select value={trigger} onValueChange={(val) => setTrigger(val as AutomationRule["trigger"])}>
-                  <SelectTrigger id="trigger">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="card-created">Card Created</SelectItem>
-                    <SelectItem value="card-moved">Card Moved</SelectItem>
-                    <SelectItem value="label-added">Label Added</SelectItem>
-                    <SelectItem value="label-removed">Label Removed</SelectItem>
-                    <SelectItem value="member-added">Member Added</SelectItem>
-                    <SelectItem value="member-removed">Member Removed</SelectItem>
-                    <SelectItem value="card-completed">Card Completed</SelectItem>
-                    <SelectItem value="due-date-set">Due Date Set</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
             {rule.type === "scheduled" && (
-              <div className="space-y-3">
+              <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_24px_48px_-28px_rgba(88,28,135,0.1)] space-y-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Schedule</p>
+                  <h3 className="text-sm font-semibold text-slate-900">Run cadence</h3>
+                </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Frequency</Label>
+                  <div className="space-y-2.5">
+                    <Label className="text-xs uppercase tracking-[0.18em] text-slate-500">Frequency</Label>
                     <Select
                       value={schedule.frequency}
                       onValueChange={(val) => handleScheduleFrequencyChange(val as ScheduleSettings["frequency"])}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className={selectTriggerClass}>
                         <SelectValue placeholder="Select frequency" />
                       </SelectTrigger>
                       <SelectContent>
@@ -401,24 +440,25 @@ export function RuleEditorDialog({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Run at</Label>
+                  <div className="space-y-2.5">
+                    <Label className="text-xs uppercase tracking-[0.18em] text-slate-500">Run at</Label>
                     <Input
                       type="time"
                       value={schedule.time ?? ""}
                       onChange={(e) => handleScheduleTimeChange(e.target.value)}
+                      className={inputClass}
                     />
                   </div>
                 </div>
 
                 {schedule.frequency === "weekly" && (
-                  <div className="space-y-2 md:w-64">
-                    <Label>Day of week</Label>
+                  <div className="space-y-2.5 md:w-64">
+                    <Label className="text-xs uppercase tracking-[0.18em] text-slate-500">Day of week</Label>
                     <Select
                       value={String(schedule.dayOfWeek ?? 1)}
                       onValueChange={handleScheduleDayOfWeekChange}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className={selectTriggerClass}>
                         <SelectValue placeholder="Select day" />
                       </SelectTrigger>
                       <SelectContent>
@@ -433,8 +473,10 @@ export function RuleEditorDialog({
                 )}
 
                 {schedule.frequency === "monthly" && (
-                  <div className="space-y-2 md:w-64">
-                    <Label htmlFor="schedule-day-of-month">Day of month</Label>
+                  <div className="space-y-2.5 md:w-64">
+                    <Label htmlFor="schedule-day-of-month" className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                      Day of month
+                    </Label>
                     <Input
                       id="schedule-day-of-month"
                       type="number"
@@ -442,6 +484,7 @@ export function RuleEditorDialog({
                       max={31}
                       value={schedule.dayOfMonth ?? 1}
                       onChange={(e) => handleScheduleDayOfMonthChange(e.target.value)}
+                      className={inputClass}
                     />
                   </div>
                 )}
@@ -449,15 +492,19 @@ export function RuleEditorDialog({
             )}
 
             {rule.type === "due-date" && (
-              <div className="space-y-3">
+              <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_24px_48px_-28px_rgba(220,38,38,0.12)] space-y-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Due date</p>
+                  <h3 className="text-sm font-semibold text-slate-900">Reminder rules</h3>
+                </div>
                 <div className="grid gap-3 md:grid-cols-3">
-                  <div className="space-y-2 md:col-span-1">
-                    <Label>Timing</Label>
+                  <div className="space-y-2.5 md:col-span-1">
+                    <Label className="text-xs uppercase tracking-[0.18em] text-slate-500">Timing</Label>
                     <Select
                       value={dueDateTriggerState.type}
                       onValueChange={(val) => handleDueDateTypeChange(val as DueDateTriggerSettings["type"])}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className={selectTriggerClass}>
                         <SelectValue placeholder="Select timing" />
                       </SelectTrigger>
                       <SelectContent>
@@ -470,23 +517,26 @@ export function RuleEditorDialog({
 
                   {(dueDateTriggerState.type === "before" || dueDateTriggerState.type === "after") && (
                     <>
-                      <div className="space-y-2 md:col-span-1">
-                        <Label htmlFor="due-date-offset">Amount</Label>
+                      <div className="space-y-2.5 md:col-span-1">
+                        <Label htmlFor="due-date-offset" className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                          Amount
+                        </Label>
                         <Input
                           id="due-date-offset"
                           type="number"
                           min={0}
                           value={dueDateTriggerState.value ?? 0}
                           onChange={(e) => handleDueDateValueChange(Number(e.target.value))}
+                          className={inputClass}
                         />
                       </div>
-                      <div className="space-y-2 md:col-span-1">
-                        <Label>Unit</Label>
+                      <div className="space-y-2.5 md:col-span-1">
+                        <Label className="text-xs uppercase tracking-[0.18em] text-slate-500">Unit</Label>
                         <Select
                           value={dueDateTriggerState.unit ?? "days"}
                           onValueChange={(val) => handleDueDateUnitChange(val as DueDateTriggerSettings["unit"])}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className={selectTriggerClass}>
                             <SelectValue placeholder="Select unit" />
                           </SelectTrigger>
                           <SelectContent>
@@ -500,37 +550,43 @@ export function RuleEditorDialog({
                 </div>
 
                 {dueDateTriggerState.type === "on" && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-slate-400">
                     Automation will run exactly when the due date is reached.
                   </p>
                 )}
               </div>
             )}
 
-            <Separator />
-
             {/* Conditions */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>Conditions</Label>
-                <Button size="sm" variant="outline" onClick={addCondition}>
+            <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_24px_48px_-28px_rgba(15,23,42,0.12)] space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Conditions</p>
+                  <p className="text-xs text-slate-500">Optional filters before the rule executes</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={addCondition}
+                  className="h-8 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-gradient-to-r hover:from-sky-500 hover:to-indigo-500 hover:text-white hover:border-transparent"
+                >
                   <Plus className="h-3 w-3 mr-1" />
                   Add Condition
                 </Button>
               </div>
 
               {conditions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No conditions - rule will always execute when triggered</p>
+                <p className="text-sm text-slate-500">No conditions — rule will always execute when triggered.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {conditions.map((condition) => (
-                    <Card key={condition.id} className="p-3">
-                      <div className="flex items-center gap-2">
+                    <Card key={condition.id} className="border-slate-200 bg-slate-50 p-3.5 rounded-xl">
+                      <div className="flex flex-wrap items-center gap-2.5 lg:flex-nowrap">
                         <Select
                           value={condition.field}
                           onValueChange={(val) => updateCondition(condition.id, "field", val)}
                         >
-                          <SelectTrigger className="w-32">
+                          <SelectTrigger className={`${selectTriggerClass} w-32`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -546,7 +602,7 @@ export function RuleEditorDialog({
                           value={condition.operator}
                           onValueChange={(val) => updateCondition(condition.id, "operator", val)}
                         >
-                          <SelectTrigger className="w-32">
+                          <SelectTrigger className={`${selectTriggerClass} w-32`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -576,7 +632,7 @@ export function RuleEditorDialog({
                               value={condition.value}
                               onValueChange={(val) => updateCondition(condition.id, "value", val)}
                             >
-                              <SelectTrigger className="flex-1">
+                              <SelectTrigger className={`${selectTriggerClass} flex-1 min-w-[160px]`}>
                                 <SelectValue placeholder="Select label..." />
                               </SelectTrigger>
                               <SelectContent>
@@ -592,7 +648,7 @@ export function RuleEditorDialog({
                               value={condition.value}
                               onChange={(e) => updateCondition(condition.id, "value", e.target.value)}
                               placeholder="Enter label name..."
-                              className="flex-1"
+                              className={`${inputClass} flex-1 min-w-[160px]`}
                             />
                           )
                         ) : condition.field === "member" ? (
@@ -601,7 +657,7 @@ export function RuleEditorDialog({
                               value={condition.value}
                               onValueChange={(val) => updateCondition(condition.id, "value", val)}
                             >
-                              <SelectTrigger className="flex-1">
+                              <SelectTrigger className={`${selectTriggerClass} flex-1 min-w-[160px]`}>
                                 <SelectValue placeholder="Select member..." />
                               </SelectTrigger>
                               <SelectContent>
@@ -617,7 +673,7 @@ export function RuleEditorDialog({
                               value={condition.value}
                               onChange={(e) => updateCondition(condition.id, "value", e.target.value)}
                               placeholder="Enter member ID..."
-                              className="flex-1"
+                              className={`${inputClass} flex-1 min-w-[160px]`}
                             />
                           )
                         ) : condition.field === "list" ? (
@@ -626,7 +682,7 @@ export function RuleEditorDialog({
                               value={condition.value}
                               onValueChange={(val) => updateCondition(condition.id, "value", val)}
                             >
-                              <SelectTrigger className="flex-1">
+                              <SelectTrigger className={`${selectTriggerClass} flex-1 min-w-[140px]`}>
                                 <SelectValue placeholder="Select list..." />
                               </SelectTrigger>
                               <SelectContent>
@@ -642,7 +698,7 @@ export function RuleEditorDialog({
                               value={condition.value}
                               onChange={(e) => updateCondition(condition.id, "value", e.target.value)}
                               placeholder="Enter list ID..."
-                              className="flex-1"
+                              className={`${inputClass} flex-1 min-w-[160px]`}
                             />
                           )
                         ) : condition.field === "complete" ? (
@@ -650,7 +706,7 @@ export function RuleEditorDialog({
                             value={condition.value}
                             onValueChange={(val) => updateCondition(condition.id, "value", val)}
                           >
-                            <SelectTrigger className="flex-1">
+                            <SelectTrigger className={`${selectTriggerClass} flex-1 min-w-[160px]`}>
                               <SelectValue placeholder="Select status..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -659,7 +715,7 @@ export function RuleEditorDialog({
                             </SelectContent>
                           </Select>
                         ) : condition.field === "due-date" ? (
-                          <div className="flex-1 flex items-center text-sm text-muted-foreground px-3">
+                          <div className="flex-1 min-w-[160px] rounded-xl border border-dashed border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-500">
                             (Compares with current date/time)
                           </div>
                         ) : (
@@ -667,7 +723,7 @@ export function RuleEditorDialog({
                             value={condition.value}
                             onChange={(e) => updateCondition(condition.id, "value", e.target.value)}
                             placeholder="Value..."
-                            className="flex-1"
+                            className={`${inputClass} flex-1 min-w-[160px]`}
                           />
                         )}
 
@@ -675,9 +731,9 @@ export function RuleEditorDialog({
                           size="icon"
                           variant="ghost"
                           onClick={() => deleteCondition(condition.id)}
-                          className="flex-shrink-0"
+                          className="h-9 w-9 rounded-full text-rose-500 hover:bg-rose-100 hover:text-rose-600 flex-shrink-0 self-start"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </Card>
@@ -686,30 +742,36 @@ export function RuleEditorDialog({
               )}
             </div>
 
-            <Separator />
-
             {/* Actions */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>Actions</Label>
-                <Button size="sm" variant="outline" onClick={addAction}>
+            <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_24px_48px_-28px_rgba(15,118,110,0.12)] space-y-3 min-h-[200px] max-h-[300px]">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.28em] text-slate-400">Actions</p>
+                  <p className="text-xs text-slate-500">What should happen when this rule fires</p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={addAction}
+                  className="h-8 rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-600 hover:bg-gradient-to-r hover:from-emerald-500 hover:to-teal-500 hover:text-white hover:border-transparent"
+                >
                   <Plus className="h-3 w-3 mr-1" />
                   Add Action
                 </Button>
               </div>
 
               {actions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No actions - rule will do nothing</p>
+                <p className="text-sm text-slate-500">No actions — the rule won&apos;t make any changes yet.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5 max-h-[200px] overflow-y-auto">
                   {actions.map((action) => (
-                    <Card key={action.id} className="p-3">
-                      <div className="flex items-center gap-2">
+                    <Card key={action.id} className="border-slate-200 bg-slate-50 p-3.5 rounded-xl">
+                      <div className="flex flex-wrap items-center gap-2.5 lg:flex-nowrap">
                         <Select
                           value={action.type}
                           onValueChange={(val) => updateAction(action.id, "type", val)}
                         >
-                          <SelectTrigger className="w-48">
+                          <SelectTrigger className={`${selectTriggerClass} w-48`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -732,7 +794,7 @@ export function RuleEditorDialog({
                               value={action.value}
                               onValueChange={(val) => updateAction(action.id, "value", val)}
                             >
-                              <SelectTrigger className="flex-1">
+                              <SelectTrigger className={`${selectTriggerClass} flex-1 min-w-[160px]`}>
                                 <SelectValue placeholder="Select label..." />
                               </SelectTrigger>
                               <SelectContent>
@@ -748,7 +810,7 @@ export function RuleEditorDialog({
                               value={action.value}
                               onChange={(e) => updateAction(action.id, "value", e.target.value)}
                               placeholder="Enter label name..."
-                              className="flex-1"
+                              className={`${inputClass} flex-1 min-w-[160px]`}
                             />
                           )
                         ) : action.type === "move-card" ? (
@@ -757,7 +819,7 @@ export function RuleEditorDialog({
                               value={action.value}
                               onValueChange={(val) => updateAction(action.id, "value", val)}
                             >
-                              <SelectTrigger className="flex-1">
+                              <SelectTrigger className={`${selectTriggerClass} flex-1 min-w-[160px]`}>
                                 <SelectValue placeholder="Select list..." />
                               </SelectTrigger>
                               <SelectContent>
@@ -773,14 +835,17 @@ export function RuleEditorDialog({
                               value={action.value}
                               onChange={(e) => updateAction(action.id, "value", e.target.value)}
                               placeholder="Enter list ID..."
-                              className="flex-1"
+                              className={`${inputClass} flex-1 min-w-[160px]`}
                             />
                           )
                         ) : action.type === "set-due-date" ? (
                           <Popover>
                             <PopoverTrigger asChild>
-                              <Button variant="outline" className="flex-1 justify-start text-left font-normal">
-                                <CalendarIcon className="mr-2 h-4 w-4" />
+                              <Button
+                                variant="outline"
+                                className="flex-1 justify-start gap-2 rounded-xl border-slate-200 bg-white text-left text-sm font-normal text-slate-600 hover:bg-slate-100"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4 text-slate-500" />
                                 {action.value ? new Date(action.value).toLocaleDateString() : "Pick a date"}
                               </Button>
                             </PopoverTrigger>
@@ -799,7 +864,7 @@ export function RuleEditorDialog({
                               value={action.value}
                               onValueChange={(val) => updateAction(action.id, "value", val)}
                             >
-                              <SelectTrigger className="flex-1">
+                              <SelectTrigger className={`${selectTriggerClass} flex-1 min-w-[160px]`}>
                                 <SelectValue placeholder="Select member..." />
                               </SelectTrigger>
                               <SelectContent>
@@ -815,7 +880,7 @@ export function RuleEditorDialog({
                               value={action.value}
                               onChange={(e) => updateAction(action.id, "value", e.target.value)}
                               placeholder="Enter member ID..."
-                              className="flex-1"
+                              className={`${inputClass} flex-1 min-w-[160px]`}
                             />
                           )
                         ) : action.type === "add-checklist" ? (
@@ -823,10 +888,10 @@ export function RuleEditorDialog({
                             value={action.value}
                             onChange={(e) => updateAction(action.id, "value", e.target.value)}
                             placeholder="Checklist title..."
-                            className="flex-1"
+                            className={`${inputClass} flex-1 min-w-[160px]`}
                           />
                         ) : action.type === "mark-complete" || action.type === "archive-card" ? (
-                          <div className="flex-1 flex items-center text-sm text-muted-foreground px-3">
+                          <div className="flex-1 min-w-[160px] rounded-xl border border-dashed border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-500">
                             (No additional value needed)
                           </div>
                         ) : (
@@ -840,7 +905,7 @@ export function RuleEditorDialog({
                                 ? "Label name..."
                                 : "Value..."
                             }
-                            className="flex-1"
+                            className={`${inputClass} flex-1 min-w-[160px]`}
                           />
                         )}
 
@@ -848,9 +913,9 @@ export function RuleEditorDialog({
                           size="icon"
                           variant="ghost"
                           onClick={() => deleteAction(action.id)}
-                          className="flex-shrink-0"
+                          className="h-9 w-9 rounded-full text-rose-500 hover:bg-rose-100 hover:text-rose-600 flex-shrink-0 self-start"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </Card>
@@ -861,11 +926,20 @@ export function RuleEditorDialog({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="px-6 py-4 border-t">
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter className="px-6 py-4 border-t border-slate-200 bg-slate-50">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            className="h-9 rounded-full border border-slate-200 bg-white px-4 text-sm font-medium text-slate-600 hover:bg-slate-100"
+          >
             Cancel
           </Button>
-          <Button onClick={handleSave}>Save Changes</Button>
+          <Button
+            onClick={handleSave}
+            className="h-9 rounded-full bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-500 px-6 text-sm font-semibold text-white shadow-[0_20px_40px_-24px_rgba(99,102,241,0.85)] hover:from-sky-400 hover:via-indigo-400 hover:to-purple-400"
+          >
+            {mode === "create" ? "Create Rule" : "Save Changes"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
