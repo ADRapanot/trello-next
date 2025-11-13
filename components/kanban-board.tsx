@@ -77,7 +77,10 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
     if (result.updatedCard || result.shouldMoveCard || result.shouldArchive) {
       setTimeout(() => {
         if (result.updatedCard) {
-          updateCard(boardId, listId, newCardId, result.updatedCard, { logActivity: false })
+          handleUpdateCard(listId, newCardId, result.updatedCard, {
+            skipAutomation: true,
+            logActivity: false,
+          })
         }
         
         // Move card if automation requires it
@@ -156,7 +159,10 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
         
         // Apply automation actions
         if (result.updatedCard) {
-          updateCard(boardId, toListId, cardId, result.updatedCard, { logActivity: false })
+          handleUpdateCard(toListId, cardId, result.updatedCard, {
+            skipAutomation: true,
+            logActivity: false,
+          })
         }
         
         // Move card again if automation requires it
@@ -180,7 +186,12 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
   }
   
   // Wrapper for updateCard with automation support
-  const handleUpdateCard = (listId: string, cardId: string, updatedCard: any) => {
+  const handleUpdateCard = (
+    listId: string,
+    cardId: string,
+    updatedCard: Partial<Card>,
+    options?: { skipAutomation?: boolean; logActivity?: boolean },
+  ) => {
     const currentLists = getLists(boardId)
     const list = currentLists.find(l => l.id === listId)
     const originalCard = list?.cards.find(c => c.id === cardId)
@@ -188,7 +199,8 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
     console.log('🔄 handleUpdateCard called with:', {
       cardId,
       updateKeys: Object.keys(updatedCard || {}),
-      updatedCard
+      updatedCard,
+      skipAutomation: options?.skipAutomation
     })
     
     // Check if there are any actual changes before proceeding
@@ -198,7 +210,14 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
     }
     
     // Update the card first
-    updateCard(boardId, listId, cardId, updatedCard)
+    const shouldLogActivity = options?.logActivity !== false
+    updateCard(boardId, listId, cardId, updatedCard, { logActivity: shouldLogActivity })
+    
+    // Skip automation if requested (to prevent infinite loops)
+    if (options?.skipAutomation) {
+      console.log('⏭️ Skipping automation - skipAutomation flag set')
+      return
+    }
     
     // Check for automation triggers
     if (originalCard) {
@@ -268,9 +287,12 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
               availableMembers
             )
             
-            // Apply automation actions
+            // Apply automation actions with skipAutomation flag
             if (result.updatedCard) {
-              updateCard(boardId, listId, cardId, result.updatedCard, { logActivity: false })
+              handleUpdateCard(listId, cardId, result.updatedCard, {
+                skipAutomation: true,
+                logActivity: false,
+              })
             }
             
             // Move card if automation requires it
@@ -287,7 +309,6 @@ export function KanbanBoard({ boardId, filters, onAvailableFiltersChange }: Kanb
       }
     }
   }
-
   const availableLabels = useMemo(() => {
     const labelSet = new Set<string>()
     lists.forEach((list) => {
