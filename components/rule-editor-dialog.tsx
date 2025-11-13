@@ -347,7 +347,7 @@ export function RuleEditorDialog({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent
-        className="max-w-3xl p-0 gap-0 border border-slate-200 rounded-[30px] shadow-[0_32px_64px_-36px_rgba(15,23,42,0.28)] bg-white text-slate-900 overflow-hidden flex flex-col max-h-[90vh]"
+        className="max-w-3xl min-w-[610px] p-0 gap-0 border border-slate-200 rounded-[30px] shadow-[0_32px_64px_-36px_rgba(15,23,42,0.28)] bg-white text-slate-900 overflow-hidden flex flex-col max-h-[90vh]"
       >
         <DialogHeader className="relative px-6 pt-6 pb-4 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-white">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.25),transparent_60%)]" />
@@ -366,7 +366,7 @@ export function RuleEditorDialog({
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-6 py-5 pr-1 text-slate-700">
+        <ScrollArea className="flex-1 px-6 py-5 text-slate-700">
           <div className="space-y-4">
             {/* Rule Name */}
             <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_24px_48px_-28px_rgba(15,23,42,0.12)] space-y-3">
@@ -794,7 +794,7 @@ export function RuleEditorDialog({
                               value={action.value}
                               onValueChange={(val) => updateAction(action.id, "value", val)}
                             >
-                              <SelectTrigger className={`${selectTriggerClass} flex-1 min-w-[160px]`}>
+                              <SelectTrigger className={`${selectTriggerClass} flex-1 min-w-[120px]`}>
                                 <SelectValue placeholder="Select label..." />
                               </SelectTrigger>
                               <SelectContent>

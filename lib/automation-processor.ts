@@ -169,34 +169,57 @@ export function applyAutomationActions(
   listId: string,
   availableLists: string[],
   availableMembers?: Array<{ id: string; name: string; avatar: string }>
-): { updatedCard: Card; targetListId?: string; shouldArchive?: boolean } {
+): { updatedCard?: Card; targetListId?: string; shouldArchive?: boolean } {
   let updatedCard = { ...card }
   let targetListId: string | undefined
   let shouldArchive = false
+  let didUpdateCard = false
+
+  const ensureLabelsArray = () => {
+    if (!updatedCard.labels) {
+      updatedCard.labels = []
+    }
+  }
+
+  const ensureMembersArray = () => {
+    if (!updatedCard.members) {
+      updatedCard.members = []
+    }
+  }
+
+  const ensureChecklistsArray = () => {
+    if (!updatedCard.checklists) {
+      updatedCard.checklists = []
+    }
+  }
 
   for (const action of actions) {
     switch (action.type) {
       case "add-label": {
-        if (!updatedCard.labels) {
-          updatedCard.labels = []
+        if (!action.value) {
+          break
         }
+        ensureLabelsArray()
         if (!updatedCard.labels.includes(action.value)) {
           updatedCard.labels = [...updatedCard.labels, action.value]
+          didUpdateCard = true
         }
         break
       }
 
       case "remove-label": {
-        if (updatedCard.labels) {
+        if (updatedCard.labels && updatedCard.labels.includes(action.value)) {
           updatedCard.labels = updatedCard.labels.filter((label) => label !== action.value)
+          didUpdateCard = true
         }
         break
       }
 
       case "add-member": {
-        if (!updatedCard.members) {
-          updatedCard.members = []
+        if (!action.value) {
+          break
         }
+        ensureMembersArray()
         // Check if member is not already added
         if (!updatedCard.members.some((m) => m.id === action.value || m.name === action.value)) {
           // Try to find the member details from availableMembers
@@ -214,33 +237,41 @@ export function applyAutomationActions(
           }
           
           updatedCard.members = [...updatedCard.members, memberToAdd]
+          didUpdateCard = true
         }
         break
       }
 
       case "remove-member": {
-        if (updatedCard.members) {
+        if (updatedCard.members?.some((member) => member.id === action.value || member.name === action.value)) {
           updatedCard.members = updatedCard.members.filter(
             (member) => member.id !== action.value && member.name !== action.value
           )
+          didUpdateCard = true
         }
         break
       }
 
       case "add-checklist": {
-        if (!updatedCard.checklists) {
-          updatedCard.checklists = []
+        ensureChecklistsArray()
+        const normalizedTitle = (action.value || "New Checklist").trim()
+        const normalizedKey = normalizedTitle.toLowerCase()
+        const hasChecklistAlready = updatedCard.checklists.some(
+          (checklist) => checklist.title?.trim().toLowerCase() === normalizedKey
+        )
+
+        if (!hasChecklistAlready) {
+          const checklistId = `checklist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+          updatedCard.checklists = [
+            ...updatedCard.checklists,
+            {
+              id: checklistId,
+              title: normalizedTitle || "New Checklist",
+              items: [],
+            },
+          ]
+          didUpdateCard = true
         }
-        // Add a new checklist with the title from action.value
-        const checklistId = `checklist-${Date.now()}`
-        updatedCard.checklists = [
-          ...updatedCard.checklists,
-          {
-            id: checklistId,
-            title: action.value || "New Checklist",
-            items: [],
-          },
-        ]
         break
       }
 
@@ -253,13 +284,17 @@ export function applyAutomationActions(
       }
 
       case "mark-complete": {
-        updatedCard.isComplete = true
+        if (!updatedCard.isComplete) {
+          updatedCard.isComplete = true
+          didUpdateCard = true
+        }
         break
       }
 
       case "set-due-date": {
-        if (action.value) {
+        if (action.value && updatedCard.dueDate !== action.value) {
           updatedCard.dueDate = action.value
+          didUpdateCard = true
         }
         break
       }
@@ -275,6 +310,10 @@ export function applyAutomationActions(
     }
   }
 
-  return { updatedCard, targetListId, shouldArchive }
+  return {
+    updatedCard: didUpdateCard ? updatedCard : undefined,
+    targetListId,
+    shouldArchive,
+  }
 }
 

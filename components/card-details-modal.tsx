@@ -217,13 +217,18 @@ export function CardDetailsModal({
   }, [card.checklists])
 
   useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
     const serialized = JSON.stringify(checklists)
     if (serialized === lastCommittedChecklistsRef.current) {
       return
     }
+
     lastCommittedChecklistsRef.current = serialized
     commitUpdate({ checklists, checklist: computeChecklistSummary(checklists) })
-  }, [checklists, commitUpdate])
+  }, [checklists, commitUpdate, isOpen])
 
   useEffect(() => {
     setIsComplete(card.isComplete || false)
