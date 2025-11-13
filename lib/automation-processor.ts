@@ -174,6 +174,7 @@ export function applyAutomationActions(
   let targetListId: string | undefined
   let shouldArchive = false
   let didUpdateCard = false
+  let checklistsChanged = false
 
   const ensureLabelsArray = () => {
     if (!updatedCard.labels) {
@@ -199,17 +200,18 @@ export function applyAutomationActions(
         if (!action.value) {
           break
         }
-        ensureLabelsArray()
-        if (!updatedCard.labels.includes(action.value)) {
-          updatedCard.labels = [...updatedCard.labels, action.value]
+        const labels = updatedCard.labels ?? (updatedCard.labels = [])
+        if (!labels.includes(action.value)) {
+          updatedCard.labels = [...labels, action.value]
           didUpdateCard = true
         }
         break
       }
 
       case "remove-label": {
-        if (updatedCard.labels && updatedCard.labels.includes(action.value)) {
-          updatedCard.labels = updatedCard.labels.filter((label) => label !== action.value)
+        const labels = updatedCard.labels
+        if (labels && labels.includes(action.value)) {
+          updatedCard.labels = labels.filter((label) => label !== action.value)
           didUpdateCard = true
         }
         break
@@ -219,9 +221,9 @@ export function applyAutomationActions(
         if (!action.value) {
           break
         }
-        ensureMembersArray()
+        const members = updatedCard.members ?? (updatedCard.members = [])
         // Check if member is not already added
-        if (!updatedCard.members.some((m) => m.id === action.value || m.name === action.value)) {
+        if (!members.some((m) => m.id === action.value || m.name === action.value)) {
           // Try to find the member details from availableMembers
           let memberToAdd = availableMembers?.find(
             (m) => m.id === action.value || m.name === action.value
@@ -236,15 +238,16 @@ export function applyAutomationActions(
             }
           }
           
-          updatedCard.members = [...updatedCard.members, memberToAdd]
+          updatedCard.members = [...members, memberToAdd]
           didUpdateCard = true
         }
         break
       }
 
       case "remove-member": {
-        if (updatedCard.members?.some((member) => member.id === action.value || member.name === action.value)) {
-          updatedCard.members = updatedCard.members.filter(
+        const members = updatedCard.members
+        if (members?.some((member) => member.id === action.value || member.name === action.value)) {
+          updatedCard.members = members.filter(
             (member) => member.id !== action.value && member.name !== action.value
           )
           didUpdateCard = true
@@ -256,7 +259,8 @@ export function applyAutomationActions(
         ensureChecklistsArray()
         const normalizedTitle = (action.value || "New Checklist").trim()
         const normalizedKey = normalizedTitle.toLowerCase()
-        const hasChecklistAlready = updatedCard.checklists.some(
+        const checklists = updatedCard.checklists ?? (updatedCard.checklists = [])
+        const hasChecklistAlready = checklists.some(
           (checklist) => checklist.title?.trim().toLowerCase() === normalizedKey
         )
 
@@ -271,6 +275,7 @@ export function applyAutomationActions(
             },
           ]
           didUpdateCard = true
+          checklistsChanged = true
         }
         break
       }
@@ -307,6 +312,38 @@ export function applyAutomationActions(
 
       default:
         break
+    }
+  }
+
+  if (checklistsChanged) {
+    const computeChecklistSummary = (lists?: Card["checklists"]) => {
+      if (!lists || lists.length === 0) return undefined
+      let total = 0
+      let completed = 0
+      for (const checklist of lists) {
+        const items = checklist.items ?? []
+        total += items.length
+        completed += items.filter((item) => item.completed).length
+      }
+      return {
+        completed,
+        total,
+      }
+    }
+
+    const summary = computeChecklistSummary(updatedCard.checklists)
+    if (summary) {
+      if (
+        !updatedCard.checklist ||
+        updatedCard.checklist.completed !== summary.completed ||
+        updatedCard.checklist.total !== summary.total
+      ) {
+        updatedCard.checklist = summary
+        didUpdateCard = true
+      }
+    } else if (updatedCard.checklist) {
+      delete updatedCard.checklist
+      didUpdateCard = true
     }
   }
 

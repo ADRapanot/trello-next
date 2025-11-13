@@ -382,16 +382,49 @@ export function KanbanCard({
             )}
 
             {/* Checklist */}
-            {card.checklist && card.checklist.total > 0 && (
-              <Badge variant="outline" className={`gap-1 ${
-                card.checklist.completed === card.checklist.total 
-                  ? "bg-green-100 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-400"
-                  : ""
-              }`}>
-                <CheckSquare className="h-3 w-3" />
-                {card.checklist.completed}/{card.checklist.total}
-              </Badge>
-            )}
+            {(() => {
+              const summaryFromCard = card.checklist
+              const hasChecklistArray = Array.isArray(card.checklists) && card.checklists.length > 0
+
+              const derivedSummary =
+                summaryFromCard && summaryFromCard.total !== undefined
+                  ? summaryFromCard
+                  : hasChecklistArray
+                    ? (() => {
+                        let total = 0
+                        let completed = 0
+                        for (const checklist of card.checklists ?? []) {
+                          const items = checklist.items ?? []
+                          total += items.length
+                          completed += items.filter((item) => item.completed).length
+                        }
+                        return { total, completed }
+                      })()
+                    : null
+
+              if (!derivedSummary && !hasChecklistArray) {
+                return null
+              }
+
+              const total = derivedSummary?.total ?? 0
+              const completed = derivedSummary?.completed ?? 0
+
+              const isComplete = total > 0 && completed === total
+
+              return (
+                <Badge
+                  variant="outline"
+                  className={`gap-1 ${
+                    isComplete
+                      ? "bg-green-100 text-green-700 border-green-300 dark:bg-green-950 dark:text-green-400"
+                      : ""
+                  }`}
+                >
+                  <CheckSquare className="h-3 w-3" />
+                  {completed}/{total}
+                </Badge>
+              )
+            })()}
 
             {/* Comments */}
             {(card.comments?.length ?? 0) > 0 && (
