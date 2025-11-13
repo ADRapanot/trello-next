@@ -1,16 +1,42 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useDrag, useDrop } from "react-dnd"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Clock, MessageSquare, Paperclip, MoreHorizontal, CheckSquare } from "lucide-react"
+import {
+  Archive,
+  ArrowRight,
+  CalendarDays,
+  CheckSquare,
+  Clock,
+  Copy,
+  ExternalLink,
+  MessageSquare,
+  Paperclip,
+  Pencil,
+  Tag,
+  Users,
+} from "lucide-react"
 import { CardDetailsModal } from "@/components/card-details-modal"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import type { Card as CardType } from "@/store/types"
-import { useLabelColor } from "@/components/label-manager"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { DateInput } from "@/components/ui/date-input"
+import type { Card as CardType, Comment, Attachment, Checklist, ChecklistItem, BoardMember } from "@/store/types"
+import { useLabelColor, LabelManager } from "@/components/label-manager"
+import { MembersManager } from "@/components/members-manager"
+import { useKanbanStore } from "@/store/kanban-store"
 
 // Label badge component that uses the hook for proper hydration
 function LabelBadge({ label }: { label: string }) {
@@ -30,6 +56,39 @@ type DragMeta = {
 }
 
 const cardDragMeta = new Map<string, DragMeta>()
+
+const createCopyId = (base: string) => `${base}-copy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+const cloneComments = (comments?: Comment[]): Comment[] =>
+  comments?.map((comment) => ({
+    ...comment,
+    id: createCopyId(comment.id ?? "comment"),
+    timestamp: new Date(comment.timestamp),
+    replies: cloneComments(comment.replies),
+  })) ?? []
+
+const cloneAttachments = (attachments?: Attachment[]): Attachment[] =>
+  attachments?.map((attachment) => ({
+    ...attachment,
+    id: createCopyId(attachment.id ?? "attachment"),
+    uploadedAt: new Date(attachment.uploadedAt),
+  })) ?? []
+
+const cloneChecklistItems = (items: ChecklistItem[]): ChecklistItem[] =>
+  items.map((item) => ({
+    ...item,
+    id: createCopyId(item.id ?? "checklist-item"),
+  }))
+
+const cloneChecklists = (checklists?: Checklist[]): Checklist[] =>
+  checklists?.map((checklist) => ({
+    ...checklist,
+    id: createCopyId(checklist.id ?? "checklist"),
+    items: cloneChecklistItems(checklist.items),
+  })) ?? []
+
+const cloneMembers = (members?: BoardMember[]): BoardMember[] =>
+  members?.map((member) => ({ ...member })) ?? []
 
 interface KanbanCardProps {
   card: CardType
@@ -59,22 +118,280 @@ export function KanbanCard({
   allLists,
   onUpdateCard,
 }: KanbanCardProps) {
+  const { getLists, addCard, updateCard: updateCardInStore } = useKanbanStore()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [clickCount, setClickCount] = useState(0)
   const [clickTimer, setClickTimer] = useState<NodeJS.Timeout | null>(null)
   const [showMenu, setShowMenu] = useState(false)
   const [isComplete, setIsComplete] = useState(card.isComplete || false)
   const [isHovered, setIsHovered] = useState(false)
+  const [labels, setLabels] = useState<string[]>(card.labels ?? [])
+  const [members, setMembers] = useState<BoardMember[]>(card.members ?? [])
+  const [labelManagerOpen, setLabelManagerOpen] = useState(false)
+  const [membersManagerOpen, setMembersManagerOpen] = useState(false)
+  const [isDateDialogOpen, setIsDateDialogOpen] = useState(false)
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false)
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false)
+  const [copyTitle, setCopyTitle] = useState(`${card.title} (Copy)`)
+  const [moveTargetListId, setMoveTargetListId] = useState(listId)
+  const [moveTargetPosition, setMoveTargetPosition] = useState(index)
+  const [copyTargetListId, setCopyTargetListId] = useState(listId)
+  const [copyTargetPosition, setCopyTargetPosition] = useState(index + 1)
+  const [enableStartDate, setEnableStartDate] = useState<boolean>(!!card.startDate)
+  const [tempStartDate, setTempStartDate] = useState<Date | undefined>(
+    card.startDate ? new Date(card.startDate) : undefined,
+  )
+  const [tempDueDate, setTempDueDate] = useState<Date | undefined>(card.dueDate ? new Date(card.dueDate) : undefined)
+  const [dueHour, setDueHour] = useState<string>("12")
+  const [dueMinute, setDueMinute] = useState<string>("00")
+  const [dueAmPm, setDueAmPm] = useState<"AM" | "PM">("PM")
   const lastHoveredItemRef = useRef<{ id: string; listId: string; index: number } | null>(null)
   const draggedItemIdRef = useRef<string | null>(null)
   const isMovingRef = useRef(false)
   const initialListIdRef = useRef(listId)
   const initialIndexRef = useRef(index)
+  const ignoreCardClickRef = useRef(false)
 
   // Sync local state with card prop when it changes
   useEffect(() => {
     setIsComplete(card.isComplete || false)
   }, [card.isComplete])
+
+  useEffect(() => {
+    setLabels(card.labels ?? [])
+  }, [card.labels])
+
+  useEffect(() => {
+    setMembers(card.members ?? [])
+  }, [card.members])
+
+  const syncDueTime = useCallback((date: Date | undefined) => {
+    if (!date) {
+      setDueHour("12")
+      setDueMinute("00")
+      setDueAmPm("PM")
+      return
+    }
+    const minutes = date.getMinutes().toString().padStart(2, "0")
+    const hours24 = date.getHours()
+    const ampm = hours24 >= 12 ? "PM" : "AM"
+    const hour12 = hours24 % 12 === 0 ? 12 : hours24 % 12
+    setDueHour(hour12.toString().padStart(2, "0"))
+    setDueMinute(minutes)
+    setDueAmPm(ampm)
+  }, [])
+
+  useEffect(() => {
+    const start = card.startDate ? new Date(card.startDate) : undefined
+    const due = card.dueDate ? new Date(card.dueDate) : undefined
+    setEnableStartDate(!!start)
+    setTempStartDate(start)
+    setTempDueDate(due)
+    syncDueTime(due)
+  }, [card.startDate, card.dueDate, syncDueTime])
+
+  useEffect(() => {
+    if (isDateDialogOpen) {
+      const start = card.startDate ? new Date(card.startDate) : undefined
+      const due = card.dueDate ? new Date(card.dueDate) : undefined
+      setEnableStartDate(!!start)
+      setTempStartDate(start)
+      setTempDueDate(due)
+      syncDueTime(due)
+    }
+  }, [isDateDialogOpen, card.startDate, card.dueDate, syncDueTime])
+
+  const lists = getLists(boardId)
+
+  const movePositionOptions = useMemo(() => {
+    const targetList = lists.find((list) => list.id === moveTargetListId)
+    const baseCount = targetList ? targetList.cards.length : 0
+    const totalPositions = moveTargetListId === listId ? baseCount : baseCount + 1
+    const count = Math.max(totalPositions, 1)
+    return Array.from({ length: count }, (_, idx) => idx)
+  }, [lists, moveTargetListId, listId])
+
+  const copyPositionOptions = useMemo(() => {
+    const targetList = lists.find((list) => list.id === copyTargetListId)
+    const baseCount = targetList ? targetList.cards.length : 0
+    const count = Math.max(baseCount + 1, 1)
+    return Array.from({ length: count }, (_, idx) => idx)
+  }, [lists, copyTargetListId])
+
+  useEffect(() => {
+    const maxIndex = movePositionOptions[movePositionOptions.length - 1] ?? 0
+    setMoveTargetPosition((prev) => Math.min(prev, maxIndex))
+  }, [movePositionOptions])
+
+  useEffect(() => {
+    const maxIndex = copyPositionOptions[copyPositionOptions.length - 1] ?? 0
+    setCopyTargetPosition((prev) => Math.min(prev, maxIndex))
+  }, [copyPositionOptions])
+
+  const runMenuAction = useCallback((event: Event, action: () => void) => {
+    event.preventDefault()
+    if ("stopPropagation" in event && typeof event.stopPropagation === "function") {
+      event.stopPropagation()
+    }
+    ignoreCardClickRef.current = true
+    action()
+    if (typeof window !== "undefined") {
+      requestAnimationFrame(() => {
+        ignoreCardClickRef.current = false
+      })
+    } else {
+      ignoreCardClickRef.current = false
+    }
+  }, [])
+
+  const closeMenu = () => setShowMenu(false)
+
+  const handleOpenCardDetails = () => {
+    closeMenu()
+    setIsModalOpen(true)
+  }
+
+  const handleOpenLabels = () => {
+    closeMenu()
+    setMembersManagerOpen(false)
+    setLabelManagerOpen(true)
+  }
+
+  const handleOpenMembers = () => {
+    closeMenu()
+    setLabelManagerOpen(false)
+    setMembersManagerOpen(true)
+  }
+
+  const handleOpenDates = () => {
+    closeMenu()
+    setLabelManagerOpen(false)
+    setMembersManagerOpen(false)
+    setIsDateDialogOpen(true)
+  }
+
+  const handleOpenMoveDialog = () => {
+    closeMenu()
+    setLabelManagerOpen(false)
+    setMembersManagerOpen(false)
+    const currentList = lists.find((list) => list.id === listId)
+    const baseCount = currentList ? currentList.cards.length : 1
+    const defaultPosition = Math.min(index, Math.max(baseCount - 1, 0))
+    setMoveTargetListId(listId)
+    setMoveTargetPosition(defaultPosition)
+    setMoveDialogOpen(true)
+  }
+
+  const handleOpenCopyDialog = () => {
+    closeMenu()
+    setLabelManagerOpen(false)
+    setMembersManagerOpen(false)
+    const currentList = lists.find((list) => list.id === listId)
+    const baseCount = currentList ? currentList.cards.length + 1 : 1
+    const defaultPosition = Math.min(index + 1, Math.max(baseCount - 1, 0))
+    setCopyTargetListId(listId)
+    setCopyTargetPosition(defaultPosition)
+    setCopyTitle(`${card.title} (Copy)`)
+    setCopyDialogOpen(true)
+  }
+
+  const handleArchiveCard = () => {
+    closeMenu()
+    onArchiveCard?.(card.id, listId)
+  }
+
+  const formatPositionLabel = useCallback((position: number, lastIndex: number) => {
+    if (position === 0) return "1 (Top)"
+    if (position === lastIndex) return `${position + 1} (Bottom)`
+    return `${position + 1}`
+  }, [])
+
+  const buildDueDateWithTime = useCallback(
+    (base: Date | undefined, hourValue: string, minuteValue: string, ampmValue: "AM" | "PM") => {
+      if (!base) return undefined
+      let hours = parseInt(hourValue || "12", 10)
+      if (Number.isNaN(hours) || hours < 1) hours = 12
+      if (hours > 12) hours = 12
+      let minutes = parseInt(minuteValue || "0", 10)
+      if (Number.isNaN(minutes) || minutes < 0) minutes = 0
+      if (minutes > 59) minutes = 59
+      if (ampmValue === "PM" && hours !== 12) {
+        hours += 12
+      } else if (ampmValue === "AM" && hours === 12) {
+        hours = 0
+      }
+      const next = new Date(base)
+      next.setHours(hours, minutes, 0, 0)
+      return next
+    },
+    [],
+  )
+
+  const handleSaveDates = () => {
+    const updates: { startDate?: string | null; dueDate?: string | null } = {}
+    updates.startDate = enableStartDate && tempStartDate ? tempStartDate.toISOString() : null
+    updates.dueDate = tempDueDate ? tempDueDate.toISOString() : null
+    onUpdateCard?.(listId, card.id, updates)
+    setIsDateDialogOpen(false)
+  }
+
+  const handleClearDates = () => {
+    const updates: { startDate: string | null; dueDate: string | null } = {
+      startDate: null,
+      dueDate: null,
+    }
+    onUpdateCard?.(listId, card.id, updates)
+    setEnableStartDate(false)
+    setTempStartDate(undefined)
+    setTempDueDate(undefined)
+    syncDueTime(undefined)
+    setIsDateDialogOpen(false)
+  }
+
+  const handleMoveConfirm = () => {
+    if (!moveTargetListId) return
+    let destinationIndex = moveTargetPosition
+    if (moveTargetListId === listId && moveTargetPosition > index) {
+      destinationIndex = moveTargetPosition - 1
+    }
+    if (moveTargetListId === listId && destinationIndex === index) {
+      setMoveDialogOpen(false)
+      return
+    }
+    onMoveCard(card.id, listId, moveTargetListId, destinationIndex, true, listId)
+    setMoveDialogOpen(false)
+  }
+
+  const handleCopyConfirm = () => {
+    if (!copyTitle.trim()) return
+    const trimmedTitle = copyTitle.trim()
+    const targetListBefore = lists.find((list) => list.id === copyTargetListId)
+    const targetLengthBefore = targetListBefore ? targetListBefore.cards.length : 0
+    const newCardId = addCard(boardId, copyTargetListId, trimmedTitle)
+    const clonedCard: Partial<CardType> = {
+      description: card.description,
+      labels: [...labels],
+      members: cloneMembers(members),
+      startDate: card.startDate,
+      dueDate: card.dueDate,
+      attachments: cloneAttachments(card.attachments),
+      comments: cloneComments(card.comments),
+      checklists: cloneChecklists(card.checklists),
+      checklist: card.checklist ? { ...card.checklist } : undefined,
+      isComplete: card.isComplete,
+    }
+
+    updateCardInStore(boardId, copyTargetListId, newCardId, clonedCard)
+
+    const desiredIndex = Math.min(copyTargetPosition, targetLengthBefore)
+    if (desiredIndex !== targetLengthBefore) {
+      setTimeout(() => {
+        onMoveCard(newCardId, copyTargetListId, copyTargetListId, desiredIndex, false, copyTargetListId)
+      }, 10)
+    }
+
+    setCopyDialogOpen(false)
+  }
 
   const [{ isDragging }, drag, preview] = useDrag(() => ({
     type: "CARD",
@@ -224,6 +541,13 @@ export function KanbanCard({
 
   const handleCardClick = () => {
     if (showMenu) return
+    if (labelManagerOpen || membersManagerOpen || isDateDialogOpen || moveDialogOpen || copyDialogOpen) {
+      return
+    }
+    if (ignoreCardClickRef.current) {
+      ignoreCardClickRef.current = false
+      return
+    }
 
     if (clickTimer) {
       clearTimeout(clickTimer)
@@ -268,23 +592,99 @@ export function KanbanCard({
           <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <DropdownMenu open={showMenu} onOpenChange={setShowMenu}>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <Button variant="ghost" size="icon" className="h-6 w-6">
-                  <MoreHorizontal className="h-3 w-3" />
+                <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Card quick actions">
+                  <Pencil className="h-3 w-3" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-32">
+              <DropdownMenuContent align="start" side="right" sideOffset={2} className="w-44">
                 <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onArchiveCard?.(card.id, listId)
-                  }}
+                  onSelect={(event) => runMenuAction(event, handleOpenCardDetails)}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open card
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => runMenuAction(event, handleOpenLabels)}
+                >
+                  <Tag className="h-4 w-4 mr-2" />
+                  Edit labels
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => runMenuAction(event, handleOpenMembers)}
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Change members
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => runMenuAction(event, handleOpenDates)}
+                >
+                  <CalendarDays className="h-4 w-4 mr-2" />
+                  Edit dates
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => runMenuAction(event, handleOpenMoveDialog)}
+                >
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  Move
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => runMenuAction(event, handleOpenCopyDialog)}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy card
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={(event) => runMenuAction(event, handleArchiveCard)}
                   className="text-destructive"
                 >
-                  <MoreHorizontal className="h-4 w-4 mr-2" />
+                  <Archive className="h-4 w-4 mr-2" />
                   Archive card
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <LabelManager
+              selectedLabels={labels}
+              onLabelsChange={(updated) => {
+                const deduped = Array.from(new Set(updated))
+                setLabels(deduped)
+                onUpdateCard?.(listId, card.id, { labels: deduped })
+              }}
+              boardId={boardId}
+              open={labelManagerOpen}
+              onOpenChange={setLabelManagerOpen}
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="absolute top-0 right-0 h-6 w-6 opacity-0 pointer-events-none"
+                >
+                  <Tag className="h-3 w-3" />
+                </Button>
+              }
+            />
+            <MembersManager
+              selectedMembers={members}
+              onMembersChange={(updatedMembers) => {
+                setMembers(updatedMembers)
+                onUpdateCard?.(listId, card.id, { members: updatedMembers })
+              }}
+              open={membersManagerOpen}
+              onOpenChange={setMembersManagerOpen}
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="absolute top-0 right-0 h-6 w-6 opacity-0 pointer-events-none"
+                >
+                  <Users className="h-3 w-3" />
+                </Button>
+              }
+            />
           </div>
 
           {isDragging && (
@@ -294,9 +694,9 @@ export function KanbanCard({
           )}
 
           {/* Labels */}
-          {card.labels && card.labels.length > 0 && (
+          {labels.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-1.5">
-              {Array.from(new Set(card.labels)).map((label, index) => (
+              {Array.from(new Set(labels)).map((label, index) => (
                 <LabelBadge key={`${label}-${index}`} label={label} />
               ))}
             </div>
@@ -436,19 +836,19 @@ export function KanbanCard({
           </div>
 
           {/* Members */}
-          {card.members && card.members.length > 0 && (
+          {members && members.length > 0 && (
             <div className="flex items-center gap-1.5 mt-1.5">
-              {card.members.slice(0, 4).map((member, idx) => (
+              {members.slice(0, 4).map((member, idx) => (
                 <Avatar key={member.id} className="h-6 w-6 border-0" style={{ zIndex: 10 - idx }}>
                   <AvatarFallback className="text-[10px] bg-primary text-primary-foreground">
                     {member.avatar}
                   </AvatarFallback>
                 </Avatar>
               ))}
-              {card.members.length > 4 && (
+              {members.length > 4 && (
                 <Avatar className="h-6 w-6 border-0">
                   <AvatarFallback className="text-[10px] bg-muted text-muted-foreground">
-                    +{card.members.length - 4}
+                    +{members.length - 4}
                   </AvatarFallback>
                 </Avatar>
               )}
@@ -456,6 +856,310 @@ export function KanbanCard({
           )}
         </Card>
       </div>
+
+      <Dialog open={isDateDialogOpen} onOpenChange={setIsDateDialogOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Edit dates</DialogTitle>
+            <DialogDescription>Adjust the start and due dates for this card.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={`card-${card.id}-start-date`}
+                  checked={enableStartDate}
+                  onCheckedChange={(checked) => {
+                    const next = checked === true
+                    setEnableStartDate(next)
+                    if (!next) {
+                      setTempStartDate(undefined)
+                    } else {
+                      const start = tempStartDate ?? tempDueDate ?? new Date()
+                      setTempStartDate(start)
+                      if (tempDueDate && start > tempDueDate) {
+                        const adjustedDue = buildDueDateWithTime(start, dueHour, dueMinute, dueAmPm)
+                        setTempDueDate(adjustedDue)
+                        syncDueTime(adjustedDue)
+                      }
+                    }
+                  }}
+                />
+                <label
+                  htmlFor={`card-${card.id}-start-date`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Start date
+                </label>
+              </div>
+              {enableStartDate && (
+                <DateInput
+                  date={tempStartDate}
+                  onDateChange={(date) => {
+                    if (!date) {
+                      setTempStartDate(undefined)
+                      setEnableStartDate(false)
+                      return
+                    }
+                    const nextStart = new Date(date)
+                    setTempStartDate(nextStart)
+                    if (tempDueDate && nextStart > tempDueDate) {
+                      const adjustedDue = buildDueDateWithTime(nextStart, dueHour, dueMinute, dueAmPm)
+                      setTempDueDate(adjustedDue)
+                      syncDueTime(adjustedDue)
+                    }
+                  }}
+                  placeholder="MM/DD/YYYY"
+                />
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none">Due date</label>
+              <DateInput
+                date={tempDueDate}
+                onDateChange={(date) => {
+                  if (!date) {
+                    setTempDueDate(undefined)
+                    return
+                  }
+                  const nextDue = buildDueDateWithTime(new Date(date), dueHour, dueMinute, dueAmPm)
+                  setTempDueDate(nextDue)
+                  if (enableStartDate && tempStartDate && nextDue && tempStartDate > nextDue) {
+                    setTempStartDate(nextDue)
+                  }
+                  syncDueTime(nextDue)
+                }}
+                placeholder="MM/DD/YYYY"
+              />
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={dueHour}
+                  onChange={(e) => {
+                    let value = e.target.value.replace(/[^\d]/g, "")
+                    if (value.length > 2) value = value.slice(0, 2)
+                    if (!value) {
+                      setDueHour("")
+                    } else {
+                      let numeric = parseInt(value, 10)
+                      if (numeric < 1) numeric = 1
+                      if (numeric > 12) numeric = 12
+                      const formatted = numeric.toString().padStart(2, "0")
+                      setDueHour(formatted)
+                      setTempDueDate((prev) => buildDueDateWithTime(prev, formatted, dueMinute, dueAmPm) ?? prev)
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (!e.target.value) {
+                      setDueHour("12")
+                      setTempDueDate((prev) => buildDueDateWithTime(prev, "12", dueMinute, dueAmPm) ?? prev)
+                    }
+                  }}
+                  className="w-16 text-center"
+                  placeholder="12"
+                  disabled={!tempDueDate}
+                />
+                <span className="text-muted-foreground">:</span>
+                <Input
+                  type="number"
+                  min="0"
+                  max="59"
+                  value={dueMinute}
+                  onChange={(e) => {
+                    let value = e.target.value.replace(/[^\d]/g, "")
+                    if (value.length > 2) value = value.slice(0, 2)
+                    if (!value) {
+                      setDueMinute("")
+                    } else {
+                      let numeric = parseInt(value, 10)
+                      if (numeric < 0) numeric = 0
+                      if (numeric > 59) numeric = 59
+                      const formatted = numeric.toString().padStart(2, "0")
+                      setDueMinute(formatted)
+                      setTempDueDate((prev) => buildDueDateWithTime(prev, dueHour, formatted, dueAmPm) ?? prev)
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (!e.target.value) {
+                      setDueMinute("00")
+                      setTempDueDate((prev) => buildDueDateWithTime(prev, dueHour, "00", dueAmPm) ?? prev)
+                    }
+                  }}
+                  className="w-16 text-center"
+                  placeholder="00"
+                  disabled={!tempDueDate}
+                />
+                <Select
+                  value={dueAmPm}
+                  onValueChange={(value: "AM" | "PM") => {
+                    setDueAmPm(value)
+                    setTempDueDate((prev) => buildDueDateWithTime(prev, dueHour, dueMinute, value) ?? prev)
+                  }}
+                  disabled={!tempDueDate}
+                >
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AM">AM</SelectItem>
+                    <SelectItem value="PM">PM</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <Button variant="ghost" className="justify-start px-0 sm:px-2" onClick={handleClearDates}>
+              Clear dates
+            </Button>
+            <div className="flex w-full sm:w-auto gap-2 justify-end">
+              <Button variant="outline" onClick={() => setIsDateDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveDates} disabled={!enableStartDate && !tempDueDate}>
+                Save
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
+        <DialogContent className="sm:max-w-[360px]">
+          <DialogHeader>
+            <DialogTitle>Move card</DialogTitle>
+            <DialogDescription>Select where this card should go.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none">List</label>
+              <Select
+                value={moveTargetListId}
+                onValueChange={(value) => {
+                  const target = lists.find((list) => list.id === value)
+                  const baseCount = target ? target.cards.length : 0
+                  setMoveTargetListId(value)
+                  if (value === listId) {
+                    const next = Math.min(index, Math.max(baseCount - 1, 0))
+                    setMoveTargetPosition(next)
+                  } else {
+                    setMoveTargetPosition(Math.max(baseCount, 0))
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a list" />
+                </SelectTrigger>
+                <SelectContent>
+                  {lists.map((list) => (
+                    <SelectItem key={list.id} value={list.id}>
+                      {list.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none">Position</label>
+              <Select
+                value={moveTargetPosition.toString()}
+                onValueChange={(value) => setMoveTargetPosition(Number(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {movePositionOptions.map((position, idx) => (
+                    <SelectItem key={position} value={position.toString()}>
+                      {formatPositionLabel(position, movePositionOptions[movePositionOptions.length - 1] ?? idx)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleMoveConfirm}>Move</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
+        <DialogContent className="sm:max-w-[360px]">
+          <DialogHeader>
+            <DialogTitle>Copy card</DialogTitle>
+            <DialogDescription>Create a duplicate of this card.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none" htmlFor={`card-${card.id}-copy-title`}>
+                Title
+              </label>
+              <Input
+                id={`card-${card.id}-copy-title`}
+                value={copyTitle}
+                onChange={(e) => setCopyTitle(e.target.value)}
+                placeholder="Card title"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none">List</label>
+              <Select
+                value={copyTargetListId}
+                onValueChange={(value) => {
+                  const target = lists.find((list) => list.id === value)
+                  const baseCount = target ? target.cards.length + 1 : 1
+                  setCopyTargetListId(value)
+                  setCopyTargetPosition(Math.max(baseCount - 1, 0))
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a list" />
+                </SelectTrigger>
+                <SelectContent>
+                  {lists.map((list) => (
+                    <SelectItem key={list.id} value={list.id}>
+                      {list.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium leading-none">Position</label>
+              <Select
+                value={copyTargetPosition.toString()}
+                onValueChange={(value) => setCopyTargetPosition(Number(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {copyPositionOptions.map((position, idx) => (
+                    <SelectItem key={position} value={position.toString()}>
+                      {formatPositionLabel(position, copyPositionOptions[copyPositionOptions.length - 1] ?? idx)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCopyDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCopyConfirm} disabled={!copyTitle.trim()}>
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <CardDetailsModal
         card={card}

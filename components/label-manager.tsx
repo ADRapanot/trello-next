@@ -23,6 +23,8 @@ interface LabelManagerProps {
   onLabelsChange?: (labels: string[]) => void
   trigger?: React.ReactNode
   boardId?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 const defaultColors = [
@@ -135,7 +137,14 @@ export const updateLabelColorCache = () => {
   }
 }
 
-export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boardId }: LabelManagerProps) {
+export function LabelManager({
+  selectedLabels = [],
+  onLabelsChange,
+  trigger,
+  boardId,
+  open,
+  onOpenChange,
+}: LabelManagerProps) {
   const [labels, setLabels] = useState<Label[]>(getStoredLabels())
   const { renameLabelGlobally, deleteLabelGlobally } = useKanbanStore()
   
@@ -148,9 +157,18 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
   const [isCreating, setIsCreating] = useState(false)
   const [newLabelName, setNewLabelName] = useState("")
   const [selectedColor, setSelectedColor] = useState(defaultColors[0])
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null)
   const [editingLabelName, setEditingLabelName] = useState("")
+
+  const isControlled = open !== undefined
+  const popoverOpen = isControlled ? open : internalOpen
+  const setPopoverOpen = (next: boolean) => {
+    if (!isControlled) {
+      setInternalOpen(next)
+    }
+    onOpenChange?.(next)
+  }
 
   const toggleLabel = (labelId: string) => {
     const label = labels.find((l) => l.id === labelId)
@@ -244,7 +262,7 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={true}>
+    <Popover open={popoverOpen} onOpenChange={setPopoverOpen} modal={true}>
       <PopoverTrigger asChild>
         {trigger || (
           <Button variant="outline" size="sm" className="bg-background">
@@ -263,7 +281,7 @@ export function LabelManager({ selectedLabels = [], onLabelsChange, trigger, boa
           <div className="p-3.5 flex-shrink-0 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-white">
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-semibold text-sm text-slate-900">Labels</h4>
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-500 hover:bg-slate-100" onClick={() => setOpen(false)}>
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-500 hover:bg-slate-100" onClick={() => setPopoverOpen(false)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>

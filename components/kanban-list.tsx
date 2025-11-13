@@ -304,7 +304,7 @@ export function KanbanList({
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="start" side="right" sideOffset={4}>
                   <DropdownMenuItem onClick={() => setIsAddingCard(true)}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add card

@@ -33,11 +33,29 @@ interface MembersManagerProps {
   onMembersChange: (members: Member[]) => void
   variant?: "button" | "avatar-stack"
   trigger?: React.ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export function MembersManager({ selectedMembers, onMembersChange, variant = "button", trigger }: MembersManagerProps) {
-  const [open, setOpen] = useState(false)
+export function MembersManager({
+  selectedMembers,
+  onMembersChange,
+  variant = "button",
+  trigger,
+  open,
+  onOpenChange,
+}: MembersManagerProps) {
+  const [internalOpen, setInternalOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+
+  const isControlled = open !== undefined
+  const popoverOpen = isControlled ? open : internalOpen
+  const setPopoverOpen = (next: boolean) => {
+    if (!isControlled) {
+      setInternalOpen(next)
+    }
+    onOpenChange?.(next)
+  }
 
   const toggleMember = (member: Member) => {
     const isSelected = selectedMembers.some((m) => m.id === member.id)
@@ -55,7 +73,7 @@ export function MembersManager({ selectedMembers, onMembersChange, variant = "bu
   )
 
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={true}>
+    <Popover open={popoverOpen} onOpenChange={setPopoverOpen} modal={true}>
       <PopoverTrigger asChild>
         {trigger ? (
           trigger
@@ -97,7 +115,7 @@ export function MembersManager({ selectedMembers, onMembersChange, variant = "bu
           <div className="p-3.5 flex-shrink-0 border-b border-slate-200 bg-gradient-to-r from-sky-50 via-white to-white">
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-semibold text-sm text-slate-900">Members</h4>
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-500 hover:bg-slate-100" onClick={() => setOpen(false)}>
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-500 hover:bg-slate-100" onClick={() => setPopoverOpen(false)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
